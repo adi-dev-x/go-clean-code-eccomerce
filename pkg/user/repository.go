@@ -11,7 +11,7 @@ import (
 
 // ListWish
 type Repository interface {
-	Register(ctx context.Context, request model.UserRegisterRequest) error
+	Register(ctx context.Context, request model.UserRegisterRequest) (string, error)
 	AddTocart(ctx context.Context, request model.Cart) error
 	AddToWish(ctx context.Context, request model.Wishlist) error
 	UpdateUser(ctx context.Context, query string, args []interface{}) error
@@ -32,9 +32,13 @@ type Repository interface {
 	GetorderDetails(ctx context.Context, request model.Order) (model.FirstAddOrder, error)
 	ActiveListing(ctx context.Context) ([]model.Coupon, error)
 	Getid(ctx context.Context, username string) string
-	//GetcartRes(ctx context.Context) ([]model.Cartresponse, error)
+	GetcartRes(ctx context.Context, id string) ([]model.Cartresponse, error)
 	ListAddress(ctx context.Context, id string) ([]model.Address, error)
 	AddAddress(ctx context.Context, request model.Address, id string) error
+	GetcartAmt(ctx context.Context, id string) int
+	GetCoupon(ctx context.Context, id string, amount int) model.CouponRes
+	GetWallAmt(ctx context.Context, id string, amount int) float32
+	CreateWallet(ctx context.Context, id string) error
 	//AddToPayment(ctx context.Context, request model.Order, fiData model.FirstAddOrder, status string, username string) (string, error)
 }
 
@@ -93,59 +97,58 @@ func (r *repository) AddToorder(ctx context.Context, request model.Order) error 
 	return nil
 }
 func (r *repository) GetorderDetails(ctx context.Context, request model.Order) (model.FirstAddOrder, error) {
-	cartDataChan := make(chan model.CartresponseData)
-	amountChan := make(chan int)
-	//couponChan := make(chan model.Coupon)
+	// cartDataChan := make(chan model.CartresponseData)
+	// amountChan := make(chan int)
+	// //couponChan := make(chan model.Coupon)
 
-	go func() {
-		data, err := r.GetcartRes(ctx)
-		cartDataChan <- model.CartresponseData{Data: data, Err: err}
-		close(cartDataChan)
+	// go func() {
+	// 	data, err := r.GetcartRes(ctx)
+	// 	cartDataChan <- model.CartresponseData{Data: data, Err: err}
+	// 	close(cartDataChan)
 
-	}()
-	go func() {
-		amount := r.GetcartAmt(ctx)
-		amountChan <- amount
-		close(amountChan)
+	// }()
+	// go func() {
+	// 	amount := r.GetcartAmt(ctx)
+	// 	amountChan <- amount
+	// 	close(amountChan)
 
-	}()
+	// }()
 
-	cartData := <-cartDataChan
-	amount := <-amountChan
-	fmt.Println("this is amttt ", amount)
-	id := request.Cartid
-	var coupon = model.CouponRes{}
-	if id != "" {
-		coupon = r.GetCoupon(ctx, request, amount)
-		fmt.Println("this is coupon!!!!!", coupon)
+	// cartData := <-cartDataChan
+	// amount := <-amountChan
+	// fmt.Println("this is amttt ", amount)
+	// id := request.Cartid
+	// var coupon = model.CouponRes{}
+	// if id != "" {
+	// 	coupon = r.GetCoupon(ctx, request, amount)
+	// 	fmt.Println("this is coupon!!!!!", coupon)
 
-	}
-	resD := model.FirstAddOrder{
-		Data:    cartData,
-		TAmount: amount,
-		CData:   coupon,
-	}
-	if coupon.Present {
-		if !coupon.Is_eligible || !coupon.Is_expired || coupon.Used {
-			resD.Notvalid = true
-		} else {
-			resD.TAmount = resD.TAmount - coupon.Amount
-		}
+	// }
+	// resD := model.FirstAddOrder{
+	// 	Data:    cartData,
+	// 	TAmount: amount,
+	// 	CData:   coupon,
+	// }
+	// if coupon.Present {
+	// 	if !coupon.Is_eligible || !coupon.Is_expired || coupon.Used {
+	// 		resD.Notvalid = true
+	// 	} else {
+	// 		resD.TAmount = resD.TAmount - coupon.Amount
+	// 	}
 
-	}
-	fmt.Println("this is resD 1!!!!!", resD)
-
+	// }
+	// fmt.Println("this is resD 1!!!!!", resD)
+	resD := model.FirstAddOrder{}
 	return resD, nil
 }
 
-func (r *repository) GetcartRes(ctx context.Context) ([]model.Cartresponse, error) {
+func (r *repository) GetcartRes(ctx context.Context, id string) ([]model.Cartresponse, error) {
 	var cres []model.Cartresponse
 	fmt.Println("reached inside GetcartRes")
-	username := ctx.Value("username").(string)
-	fmt.Println("inside the cart list ", username)
-	query := `SELECT c.id AS cid, c.user_id AS usid,c.product_id AS pid ,c.unit,p.amount,p.discount  FROM cart  c JOIN product_models p on c.product_id = p.id JOIN users u ON c.user_id=u.id WHERE u.email = $1`
+
+	query := `SELECT c.id AS cid, c.user_id AS usid,c.product_id AS pid ,c.unit,p.amount,p.discount  FROM cart  c JOIN product_models p on c.product_id = p.id JOIN users u ON c.user_id=u.id WHERE u.id = $1`
 	//rows, err := r.sql.QueryContext(ctx, query, username)
-	rows, err := r.sql.Query(query, username)
+	rows, err := r.sql.Query(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute select query: %w", err)
 	}
@@ -166,21 +169,19 @@ func (r *repository) GetcartRes(ctx context.Context) ([]model.Cartresponse, erro
 
 	return cres, nil
 }
-func (r *repository) GetcartAmt(ctx context.Context) int {
+func (r *repository) GetcartAmt(ctx context.Context, id string) int {
 	total := 0
 	query := `SELECT SUM(c.unit * p.amount - p.discount) AS total_sum 
 	          FROM cart c 
 	          JOIN product_models p ON c.product_id = p.id 
 	          JOIN users u ON c.user_id = u.id 
-	          WHERE u.email = $1`
+	          WHERE u.id = $1`
 
-	username := ctx.Value("username").(string)
-
-	row := r.sql.QueryRowContext(ctx, query, username)
+	row := r.sql.QueryRowContext(ctx, query, id)
 	err := row.Scan(&total)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			fmt.Println("No rows found for username:", username)
+			fmt.Println("No rows found for username:", id)
 			return 0
 		}
 		fmt.Println("Error scanning row:", err)
@@ -190,10 +191,9 @@ func (r *repository) GetcartAmt(ctx context.Context) int {
 	fmt.Println("Total amount:", total)
 	return total
 }
-func (r *repository) GetCoupon(ctx context.Context, request model.Order, amount int) model.CouponRes {
+func (r *repository) GetCoupon(ctx context.Context, id string, amount int) model.CouponRes {
 	fmt.Println("thissssss issssss getCoupon")
 	var coupon model.CouponRes
-	id := request.Cartid
 
 	var query = `SELECT id AS cid,code, expiry, CASE WHEN TO_DATE(expiry, 'DD/MM/YYYY') < CURRENT_DATE THEN true ELSE false
 	 END AS is_expired, 
@@ -208,21 +208,27 @@ func (r *repository) GetCoupon(ctx context.Context, request model.Order, amount 
 		}
 		return model.CouponRes{}
 	}
-	if coupon.Cid == "" {
-		coupon.Present = false
-		fmt.Println("no coupon is thereee")
-
-	} else {
-		coupon.Present = true
-
-	}
-	if !coupon.Is_eligible || !coupon.Is_expired || coupon.Used {
-		coupon.Valid = false
-	}
-	fmt.Println("the data !!!! ", coupon)
 
 	return coupon
+}
+func (r *repository) GetWallAmt(ctx context.Context, id string, amount int) float32 {
+	fmt.Println("thissssss issssss getCoupon")
 
+	var amt float32
+	var query = `SELECT balance from wallet WHERE user_id = $1;`
+	row := r.sql.QueryRowContext(ctx, query, id)
+	err := row.Scan(&amt)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Println("No rows found for GetWallAmt:", id)
+			return 0.0
+		}
+		fmt.Println("Error scanning row:", err)
+		return 0.0
+	}
+
+	return amt
 }
 
 func (r *repository) GetCartById(ctx context.Context, cartId string) (model.Cart, error) {
@@ -260,10 +266,21 @@ func (r *repository) ListAddress(ctx context.Context, id string) ([]model.Addres
 	return add, nil
 }
 
-func (r *repository) Register(ctx context.Context, request model.UserRegisterRequest) error {
+func (r *repository) Register(ctx context.Context, request model.UserRegisterRequest) (string, error) {
 	fmt.Println("this is in the repository Register")
-	query := `INSERT INTO users (firstname, lastname, email, password) VALUES ($1, $2, $3, $4)`
-	_, err := r.sql.ExecContext(ctx, query, request.FirstName, request.LastName, request.Email, request.Password)
+	var id string
+	query := `INSERT INTO users (firstname, lastname, email, password) VALUES ($1, $2, $3, $4) Returning id`
+	err := r.sql.QueryRowContext(ctx, query, request.FirstName, request.LastName, request.Email, request.Password).Scan(&id)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute insert query: %w", err)
+	}
+
+	return id, nil
+}
+func (r *repository) CreateWallet(ctx context.Context, id string) error {
+	fmt.Println("this is in the repository Register")
+	query := `INSERT INTO wallet (user_id,balance) VALUES ($1, 0.0)`
+	_, err := r.sql.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to execute insert query: %w", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"myproject/pkg/config"
 	"myproject/pkg/model"
+
 	"regexp"
 	"strings"
 
@@ -34,6 +35,7 @@ type Service interface {
 	ListWish(ctx context.Context, id string) ([]model.UserWishview, error)
 	ListAddress(ctx context.Context, username string) ([]model.Address, error)
 	ActiveListing(ctx context.Context) ([]model.Coupon, error)
+	AddToCheck(ctx context.Context, request model.CheckOut, username string) error
 }
 type service struct {
 	repo   Repository
@@ -99,7 +101,7 @@ func (s *service) AddToWish(ctx context.Context, request model.Wishlist) error {
 	_, err := s.repo.ListingByid(ctx, request.Productid)
 	if err != nil {
 		fmt.Println("failed to get product:", err)
-		return fmt.Errorf("failed to get product: %w", err)
+		return fmt.Errorf("failed to get product", err)
 	}
 
 	return s.repo.AddToWish(ctx, request)
@@ -132,29 +134,67 @@ func (s *service) AddToorder(ctx context.Context, request model.Order) (model.RZ
 	//fmt.Println("this is the status ", status)
 	return k, nil
 }
-func (s *service) CheckOut(ctx context.Context, request model.Order) (model.RZpayment, error) {
-
-	fmt.Println("inside the service corrected Addto order ")
-	username := ctx.Value("username").(string)
-	fmt.Println("inside the cart list ", username)
-	// cartDataChan := make(chan model.CartresponseData)
-	// amountChan := make(chan int)
+func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, username string) error {
+	id := s.repo.Getid(ctx, username)
+	fmt.Println("inside the service corrected Addto order ", id)
+	cartDataChan := make(chan model.CartresponseData)
+	amountChan := make(chan int)
 	go func() {
+		data, err := s.repo.GetcartRes(ctx, id)
+		cartDataChan <- model.CartresponseData{Data: data, Err: err}
+		close(cartDataChan)
+
+	}()
+	go func() {
+		amount := s.repo.GetcartAmt(ctx, id)
+		amountChan <- amount
+		close(amountChan)
 
 	}()
 
-	fiData, _ := s.repo.GetorderDetails(ctx, request)
-	fmt.Println("thisss is the daaa ", fiData.Data.Data, "and this is amount ", fiData.TAmount)
-	if !fiData.Notvalid {
-		return model.RZpayment{}, fmt.Errorf("not a valid coupon")
+	cartData := <-cartDataChan
+	amount := <-amountChan
+	cid := request.Cartid
+	PayType := request.Type
+	fmt.Println("klkl", PayType)
+	var coupon = model.CouponRes{}
+	if cid != "" {
+		coupon = s.repo.GetCoupon(ctx, cid, amount)
+		fmt.Println("this is coupon!!!!!", coupon)
+		//|| coupon.Is_eligible || coupon.Is_expired || coupon.Used
+		if coupon.Cid == "" {
+			coupon.Present = false
+			fmt.Println("no coupon is thereee")
+			return fmt.Errorf("failed to get Coupon", "not a valid coupon")
+
+		} else {
+			coupon.Present = true
+
+		}
 	}
-	var k model.RZpayment
-	k = s.PayGateway(ctx, fiData.TAmount)
-	fmt.Println("this is kkkkkkkk!!!!!", k)
-	// Pid, err := s.repo.AddToPayment(ctx, request, fiData, status, username)
-	// oid, err := s.repo.AddToOrderDetails(ctx, request, fiData, status, username, Pid)
-	//fmt.Println("this is the status ", status)
-	return k, nil
+	wamt := request.Wallet
+	var w_amt float32
+	if wamt == true {
+		w_amt = s.repo.GetWallAmt(ctx, id, amount)
+		fmt.Println("this is walett!!!!!", w_amt)
+
+	} else {
+		w_amt = 0.0
+	}
+
+	Camt := (float64(coupon.Amount) / 100.0) * float64(amount)
+	fmt.Println("this is the calculation vart!!", Camt, coupon.Amount, amount, w_amt)
+	var newAmount float64
+	if float64(w_amt) < (float64(amount) - Camt) {
+
+		newAmount = float64(amount) - Camt - float64(w_amt)
+	} else {
+		newAmount = float64(w_amt) - float64(amount) - Camt
+
+	}
+	fmt.Println("this is the end data from AddToCheck", cartData, "dvdsvdsvdsv!!", amount, "this is the new amount", newAmount)
+
+	return nil
 }
 
 func (s *service) PayGateway(ctx context.Context, amt int) model.RZpayment {
@@ -244,7 +284,11 @@ func (s *service) Register(ctx context.Context, request model.UserRegisterReques
 	}
 	request.Password = string(hashedPassword)
 	fmt.Println("this is in the service Register", request.Password)
-	return s.repo.Register(ctx, request)
+	id, _ := s.repo.Register(ctx, request)
+	if err != nil {
+		return fmt.Errorf("failed to register user: %w", err)
+	}
+	return s.repo.CreateWallet(ctx, id)
 }
 
 func (s *service) Login(ctx context.Context, request model.UserLoginRequest) error {

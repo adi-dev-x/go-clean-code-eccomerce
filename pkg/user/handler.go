@@ -430,17 +430,26 @@ func (h *Handler) AddToorder(c echo.Context) error {
 
 // /this is testing
 func (h *Handler) AddToCheck(c echo.Context) error {
-	fmt.Println("this is in the handler AddToOrder")
+	fmt.Println("this is in the handler AddToCheck")
 	authHeader := c.Request().Header.Get("Authorization")
 	fmt.Println("inside the cart list ", authHeader)
-	usernames := c.Get("username").(string)
-	fmt.Println("inside the cart list ", usernames)
-
+	username := c.Get("username").(string)
+	fmt.Println("inside the cart list ", username)
+	ctx := c.Request().Context()
 	var request model.CheckOut
 	if err := c.Bind(&request); err != nil {
 		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
 	}
+	errValues, _ := request.Valid()
+	if len(errValues) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": errValues})
+	}
+	///////this start
 
+	err := h.service.AddToCheck(ctx, request, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 	//return c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }

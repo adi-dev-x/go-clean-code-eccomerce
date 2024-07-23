@@ -105,23 +105,24 @@ type CheckOut struct {
 	Type         string `json:"cod"`
 	Returnstatus bool   `json:"returnstatus"`
 	Aid          string `json:"aid"`
+	Wallet       bool   `json:"w_amt"`
 }
 
-func (u *CheckOut) Valid() url.Values {
-	err := url.Values{}
-
+func (u *CheckOut) Valid() (err url.Values, Coupon bool) {
+	err = url.Values{}
+	Coupon = false
 	if u.Aid == "" {
 		err.Add("Address ", "please ADD Address")
-		return err
+		return err, Coupon
 	}
-	if u.Type == "" {
+	if !(u.Type == "ONLINE" || u.Type == "COD") {
 		err.Add("Payment Type  ", "please ADD Payment Type")
-		return err
+		return err, Coupon
 	}
 	// if u.Aid == "" {
 	// 	err.Add("Aid ", "no address")
 	// 	return err
 	// }
-	return url.Values{}
+	return url.Values{}, Coupon
 
 }
