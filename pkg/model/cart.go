@@ -1,6 +1,9 @@
 package model
 
-import "net/url"
+import (
+	"fmt"
+	"net/url"
+)
 
 type Cart struct {
 	Productid string `json:"product_id"`
@@ -36,17 +39,17 @@ type Coupon struct {
 	Amount    int    `json:"amount"`
 }
 type CouponRes struct {
-	Cid       string `json:"cid"`
-	Code      string `json:"code"`
-	Expiry    string `json:"expiry"`
-	Minamount int    `json:"min_amount"`
-	Amount    int    `json:"amount"`
+	Cid         string `json:"cid"`
+	Code        string `json:"code"`
+	Expiry      string `json:"expiry"`
+	Minamount   int    `json:"min_amount"`
+	Amount      int    `json:"amount"`
+	CurrentDate string `json:"current_date"`
+	Is_expired  bool   `json:"is_expired"`
+	Is_eligible bool   `json:"is_eligible"`
+	Used        bool   `json:"used"`
 
-	Is_expired  bool `json:"is_expired"`
-	Is_eligible bool `json:"is_eligible"`
-	Used        bool `json:"used"`
-	Valid       bool
-	Present     bool
+	Present bool
 }
 type Cartresponse struct {
 	Cid      string `json:"cid"`
@@ -100,7 +103,6 @@ func (u *Order) Valid() url.Values {
 }
 
 type CheckOut struct {
-	Cartid       string `json:"cart_id"`
 	Couponid     string `json:"coupon_id"`
 	Type         string `json:"cod"`
 	Returnstatus bool   `json:"returnstatus"`
@@ -113,16 +115,66 @@ func (u *CheckOut) Valid() (err url.Values, Coupon bool) {
 	Coupon = false
 	if u.Aid == "" {
 		err.Add("Address ", "please ADD Address")
-		return err, Coupon
+
 	}
 	if !(u.Type == "ONLINE" || u.Type == "COD") {
 		err.Add("Payment Type  ", "please ADD Payment Type")
-		return err, Coupon
+
 	}
 	// if u.Aid == "" {
 	// 	err.Add("Aid ", "no address")
 	// 	return err
 	// }
-	return url.Values{}, Coupon
+	return err, Coupon
+
+}
+
+type Placeorderlist struct {
+	Data string
+	Err  error
+}
+type InsertOrder struct {
+	Usid       string
+	Amount     int
+	Discount   int
+	CouponAmt  float64
+	WalletAmt  float64
+	PayableAmt float64
+	PayType    string
+	Aid        string
+	Status     string
+	CouponId   string
+}
+type PaymentInsert struct {
+	OrderId string
+	Usid    string
+	Amount  float64
+	Status  string
+	Type    string
+}
+
+func (u *CouponRes) Valid() (err url.Values) {
+	err = url.Values{}
+
+	if !u.Is_eligible {
+		fmt.Println("in check 1!!!")
+		err.Add("Amount ", "Total amount is less")
+
+	}
+	if u.Is_expired {
+		fmt.Println("in check 2!!!")
+		err.Add("Expired ", "coupon is expired")
+
+	}
+	if u.Used {
+		fmt.Println("in check 3!!!")
+		err.Add("Used ", "coupon is already used")
+
+	}
+	// if u.Aid == "" {
+	// 	err.Add("Aid ", "no address")
+	// 	return err
+	// }
+	return err
 
 }

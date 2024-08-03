@@ -36,10 +36,15 @@ type Repository interface {
 	ListAddress(ctx context.Context, id string) ([]model.Address, error)
 	AddAddress(ctx context.Context, request model.Address, id string) error
 	GetcartAmt(ctx context.Context, id string) int
+	GetcartDis(ctx context.Context, id string) int
 	GetCoupon(ctx context.Context, id string, amount int) model.CouponRes
 	GetWallAmt(ctx context.Context, id string, amount int) float32
 	CreateWallet(ctx context.Context, id string) error
+	CreateOrder(ctx context.Context, order model.InsertOrder) (string, error)
 	//AddToPayment(ctx context.Context, request model.Order, fiData model.FirstAddOrder, status string, username string) (string, error)
+	AddOrderItems(ctx context.Context, cartData model.CartresponseData, OrderID string, id string) error
+	MakePayment(ctx context.Context, paySt model.PaymentInsert) (string, error)
+	UpdateStock(ctx context.Context, cartData model.CartresponseData) error
 }
 
 type repository struct {
@@ -50,6 +55,102 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) UpdateStock(ctx context.Context, cartData model.CartresponseData) error {
+
+	return nil
+}
+func (r *repository) MakePayment(ctx context.Context, payment model.PaymentInsert) (string, error) {
+	fmt.Println("this is the MakePayment in repo!!111", payment)
+	query := `
+	INSERT INTO payment (
+		order_id, user_id, amount, payment_method, payment_status, 
+		payment_date, created_at, updated_at
+	) VALUES (
+		$1, $2, $3, $4, $5,  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+	) RETURNING id;
+  `
+	var paymentID string
+	err := r.sql.QueryRowContext(ctx, query,
+		payment.OrderId,
+		payment.Usid,
+		payment.Amount,
+		payment.Type,
+		payment.Status,
+	).Scan(&paymentID)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute insert query: %w", err)
+	}
+
+	return paymentID, nil
+}
+func (r *repository) AddOrderItems(ctx context.Context, cartDatas model.CartresponseData, orderID string, id string) error {
+	fmt.Println("this is in the repo of AddOrderItems!!!", cartDatas.Data)
+	var (
+		queryBuilder strings.Builder
+		values       []interface{}
+	)
+	cartData := cartDatas.Data
+
+	queryBuilder.WriteString(`INSERT INTO order_items (order_id, product_id, quantity, price, discount, returned,user_id) VALUES `)
+
+	for i, item := range cartData {
+		if i > 0 {
+			queryBuilder.WriteString(", ")
+		}
+		queryBuilder.WriteString(fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d)", i*7+1, i*7+2, i*7+3, i*7+4, i*7+5, i*7+6, i*7+7))
+		values = append(values, orderID, item.Pid, item.Unit, item.Amount, item.Discount, false, id)
+	}
+
+	query := queryBuilder.String()
+	fmt.Println("Generated query: ", query)
+
+	tx, err := r.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, query, values...)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to execute insert query: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+func (r *repository) CreateOrder(ctx context.Context, order model.InsertOrder) (string, error) {
+
+	query := `
+        INSERT INTO orders (
+            user_id,total_amount,discount,coupon_amount,wallet_money,payable_amount,
+            payment_method,address_id,status,cid,order_date,created_at,updated_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        ) RETURNING id;
+    `
+
+	var orderID string
+	err := r.sql.QueryRowContext(ctx, query,
+		order.Usid,
+		order.Amount,
+		order.Discount,
+		order.CouponAmt,
+		order.WalletAmt,
+		order.PayableAmt,
+		order.PayType,
+		order.Aid,
+		order.Status,
+		order.CouponId,
+	).Scan(&orderID)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute insert query: %w", err)
+	}
+
+	return orderID, nil
 }
 func (r *repository) ActiveListing(ctx context.Context) ([]model.Coupon, error) {
 	fmt.Println("this is lia couppp")
@@ -191,16 +292,47 @@ func (r *repository) GetcartAmt(ctx context.Context, id string) int {
 	fmt.Println("Total amount:", total)
 	return total
 }
+func (r *repository) GetcartDis(ctx context.Context, id string) int {
+	total := 0
+	query := `SELECT SUM(p.discount) AS total_sum 
+	          FROM cart c 
+	          JOIN product_models p ON c.product_id = p.id 
+	          JOIN users u ON c.user_id = u.id 
+	          WHERE u.id = $1`
+
+	row := r.sql.QueryRowContext(ctx, query, id)
+	err := row.Scan(&total)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Println("No rows found for username:", id)
+			return 0
+		}
+		fmt.Println("Error scanning row:", err)
+		return 0
+	}
+
+	fmt.Println("Total amount:", total)
+	return total
+}
 func (r *repository) GetCoupon(ctx context.Context, id string, amount int) model.CouponRes {
 	fmt.Println("thissssss issssss getCoupon")
 	var coupon model.CouponRes
+	fmt.Println("this is the coupon check amountsss !!!", amount, "!!!!!! this is id  ", id)
 
-	var query = `SELECT id AS cid,code, expiry, CASE WHEN TO_DATE(expiry, 'DD/MM/YYYY') < CURRENT_DATE THEN true ELSE false
-	 END AS is_expired, 
-	CASE WHEN $1 > min_amount THEN true ELSE false END AS is_eligible, min_amount, amount,used FROM coupon WHERE id = $2;
-`
-	err := r.sql.QueryRowContext(ctx, query, amount, id).Scan(&coupon.Cid, &coupon.Code, &coupon.Expiry, &coupon.Is_expired,
-		&coupon.Is_expired, &coupon.Minamount, &coupon.Amount, &coupon.Used)
+	var query = `SELECT id AS cid, code, expiry, CURRENT_DATE AS current_date, CASE WHEN TO_DATE(expiry, 'DD/MM/YYYY') < CURRENT_DATE THEN true ELSE false END AS is_expired, 
+	CASE WHEN $1 > min_amount THEN true ELSE false END AS is_eligible, min_amount, amount, used FROM coupon WHERE id = $2;`
+
+	err := r.sql.QueryRowContext(ctx, query, amount, id).Scan(
+		&coupon.Cid,
+		&coupon.Code,
+		&coupon.Expiry,
+		&coupon.CurrentDate,
+		&coupon.Is_expired,
+		&coupon.Is_eligible,
+		&coupon.Minamount,
+		&coupon.Amount,
+		&coupon.Used,
+	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {

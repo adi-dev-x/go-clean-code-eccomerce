@@ -136,9 +136,11 @@ func (s *service) AddToorder(ctx context.Context, request model.Order) (model.RZ
 }
 func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, username string) error {
 	id := s.repo.Getid(ctx, username)
+	Paymentstatus := "Pending"
 	fmt.Println("inside the service corrected Addto order ", id)
 	cartDataChan := make(chan model.CartresponseData)
 	amountChan := make(chan int)
+	discountChan := make(chan int)
 	go func() {
 		data, err := s.repo.GetcartRes(ctx, id)
 		cartDataChan <- model.CartresponseData{Data: data, Err: err}
@@ -151,26 +153,31 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		close(amountChan)
 
 	}()
+	go func() {
+		amount := s.repo.GetcartDis(ctx, id)
+		discountChan <- amount
+		close(discountChan)
+
+	}()
 
 	cartData := <-cartDataChan
 	amount := <-amountChan
-	cid := request.Cartid
+	discount := <-discountChan
+	cid := request.Couponid
 	PayType := request.Type
 	fmt.Println("klkl", PayType)
+	couponAmt := 0
 	var coupon = model.CouponRes{}
 	if cid != "" {
 		coupon = s.repo.GetCoupon(ctx, cid, amount)
-		fmt.Println("this is coupon!!!!!", coupon)
-		//|| coupon.Is_eligible || coupon.Is_expired || coupon.Used
-		if coupon.Cid == "" {
-			coupon.Present = false
-			fmt.Println("no coupon is thereee")
-			return fmt.Errorf("failed to get Coupon", "not a valid coupon")
-
-		} else {
-			coupon.Present = true
-
+		errValues := coupon.Valid()
+		if len(errValues) > 0 {
+			// return fmt.Errorf(map[string]interface{}{"invalid": errValues})
+			return fmt.Errorf("invalid", errValues)
 		}
+		couponAmt = coupon.Amount
+		fmt.Println("this is coupon!!!!!", coupon, "this is checks ", coupon.Is_expired, "this is eligible ", coupon.Is_eligible)
+
 	}
 	wamt := request.Wallet
 	var w_amt float32
@@ -182,21 +189,77 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		w_amt = 0.0
 	}
 
-	Camt := (float64(coupon.Amount) / 100.0) * float64(amount)
-	fmt.Println("this is the calculation vart!!", Camt, coupon.Amount, amount, w_amt)
+	Camt := (float64(couponAmt) / 100.0) * float64(amount)
+	fmt.Println("this is the calculation vart!!", Camt, couponAmt, amount, w_amt, PayType, request.Aid, Paymentstatus)
 	var newAmount float64
+	walletDeduction := 0.0
 	if float64(w_amt) < (float64(amount) - Camt) {
 
 		newAmount = float64(amount) - Camt - float64(w_amt)
+		walletDeduction = float64(w_amt)
+		fmt.Println("1 this is the calculated amount!", newAmount, "Previous Amount", amount)
 	} else {
-		newAmount = float64(w_amt) - float64(amount) - Camt
+		newAmount = 0
+		request.Type = "Wallet"
+		Paymentstatus = "Completed"
+		walletDeduction = float64(amount) - Camt
+		fmt.Println("2 this is the calculated amount!", newAmount, "Previous Amount", amount)
 
 	}
-	fmt.Println("this is the end data from AddToCheck", cartData, "dvdsvdsvdsv!!", amount, "this is the new amount", newAmount)
+	fmt.Println("this is the end data from AddToCheck", cartData, "dvdsvdsvdsv!!", amount, "this is the new amount", newAmount, "wallet deduction!!", walletDeduction)
+	order := model.InsertOrder{
+		Usid:       id,
+		Amount:     amount,
+		Discount:   discount,
+		CouponAmt:  Camt,
+		WalletAmt:  walletDeduction,
+		PayableAmt: newAmount,
+		PayType:    PayType,
+		Aid:        request.Aid,
+		Status:     Paymentstatus,
+		CouponId:   cid,
+	}
+	OrderID, err := s.repo.CreateOrder(ctx, order)
+	if err != nil {
+		return fmt.Errorf("failed to create order: %w", err)
+	}
+
+	fmt.Println("Order created with ID:!!!!", OrderID)
+
+	// Placeorderlist := make(chan model.Placeorderlist)
+
+	// PlacePayment := make(chan string)
+	//err := s.repo.AddOrderItems(ctx, cartData, OrderID)
+	err = s.repo.AddOrderItems(ctx, cartData, OrderID, id)
+	if err != nil {
+		return fmt.Errorf("failed to create order: %w", err)
+	}
+	ty := request.Type
+	paySt := model.PaymentInsert{
+		OrderId: OrderID,
+		Usid:    id,
+		Amount:  newAmount,
+		Status:  Paymentstatus,
+		Type:    ty,
+	}
+	PaymentId, err := s.repo.MakePayment(ctx, paySt)
+	if err != nil {
+		return fmt.Errorf("failed to create order: %w", err)
+	}
+	fmt.Println("this the payment id!!", PaymentId)
+	if ty != "ONLINE" {
+
+		s.PostCheckout(ctx, PaymentId, OrderID, cartData, id, walletDeduction)
+	}
 
 	return nil
 }
-
+func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID string, cartData model.CartresponseData, id string, walletDeduction float64) {
+	err := s.repo.UpdateStock(ctx, cartData)
+	if err != nil {
+		fmt.Errorf("failed to create order: %w", err)
+	}
+}
 func (s *service) PayGateway(ctx context.Context, amt int) model.RZpayment {
 
 	//Razor_ID := s.Config.Razor_ID
