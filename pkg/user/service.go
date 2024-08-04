@@ -259,6 +259,17 @@ func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID st
 	if err != nil {
 		fmt.Errorf("failed to create order: %w", err)
 	}
+	for _, v := range cartData.Data {
+		quantity := v.Unit
+		id := v.Pid
+		value := []interface{}{quantity, id}
+
+		err := s.repo.UpdateStock(ctx, value)
+		if err != nil {
+			fmt.Errorf("failed to create order: %w", err)
+		}
+
+	}
 }
 func (s *service) PayGateway(ctx context.Context, amt int) model.RZpayment {
 

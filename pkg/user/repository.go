@@ -44,7 +44,7 @@ type Repository interface {
 	//AddToPayment(ctx context.Context, request model.Order, fiData model.FirstAddOrder, status string, username string) (string, error)
 	AddOrderItems(ctx context.Context, cartData model.CartresponseData, OrderID string, id string) error
 	MakePayment(ctx context.Context, paySt model.PaymentInsert) (string, error)
-	UpdateStock(ctx context.Context, cartData model.CartresponseData) error
+	UpdateStock(ctx context.Context, value interface{}) error
 }
 
 type repository struct {
@@ -56,7 +56,41 @@ func NewRepository(sqlDB *sql.DB) Repository {
 		sql: sqlDB,
 	}
 }
-func (r *repository) UpdateStock(ctx context.Context, cartData model.CartresponseData) error {
+func (r *repository) UpdateStock(ctx context.Context, value interface{}) error {
+
+	fmt.Println(value)
+	///!!!!!!!!!!!!!!!!!!!!!!!
+	values, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid input: expected []interface{}")
+	}
+
+	// Ensure the values slice has the correct number of elements
+	if len(values) != 2 {
+		return fmt.Errorf("invalid input: expected 2 elements, got %d", len(values))
+	}
+
+	quaInterface := values[0]
+	idInterface := values[1]
+
+	// Type assertion to extract underlying int values
+	qua, _ := quaInterface.(int)
+	id, _ := idInterface.(string)
+
+	////1//////!!!!!!!!!!!!!!!!!!!!
+
+	query := `
+	UPDATE product_models
+	SET units = units - $1
+	WHERE id = $2
+	RETURNING id;
+`
+	var Product_id string
+
+	err := r.sql.QueryRowContext(ctx, query, qua, id).Scan(&Product_id)
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
 
 	return nil
 }
