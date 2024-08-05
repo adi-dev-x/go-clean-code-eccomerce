@@ -219,12 +219,12 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		Status:     Paymentstatus,
 		CouponId:   cid,
 	}
-	OrderID, err := s.repo.CreateOrder(ctx, order)
+	OrderID, uuid, err := s.repo.CreateOrder(ctx, order)
 	if err != nil {
 		return fmt.Errorf("failed to create order: %w", err)
 	}
 
-	fmt.Println("Order created with ID:!!!!", OrderID)
+	fmt.Println("Order created with ID:!!!!", OrderID, uuid)
 
 	// Placeorderlist := make(chan model.Placeorderlist)
 
@@ -247,6 +247,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		return fmt.Errorf("failed to create order: %w", err)
 	}
 	fmt.Println("this the payment id!!", PaymentId)
+
 	if ty != "ONLINE" {
 
 		s.PostCheckout(ctx, PaymentId, OrderID, cartData, id, walletDeduction)
@@ -255,10 +256,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	return nil
 }
 func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID string, cartData model.CartresponseData, id string, walletDeduction float64) {
-	err := s.repo.UpdateStock(ctx, cartData)
-	if err != nil {
-		fmt.Errorf("failed to create order: %w", err)
-	}
+
 	for _, v := range cartData.Data {
 		quantity := v.Unit
 		id := v.Pid
@@ -270,6 +268,20 @@ func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID st
 		}
 
 	}
+	value := []interface{}{walletDeduction, id}
+	wallet_id, err := s.repo.UpdateWallet(ctx, value)
+	fmt.Println("this is wallet id $$$$!!!$$$", wallet_id)
+	if err != nil {
+		fmt.Errorf("failed to create order: %w", err)
+	}
+	if walletDeduction != 0 {
+		value := []interface{}{walletDeduction, wallet_id, "Debit"}
+		err := s.repo.UpdateWalletTransaction(ctx, value)
+		if err != nil {
+			fmt.Errorf("failed to create order: %w", err)
+		}
+	}
+
 }
 func (s *service) PayGateway(ctx context.Context, amt int) model.RZpayment {
 

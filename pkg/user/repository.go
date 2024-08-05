@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"myproject/pkg/model"
@@ -40,11 +41,13 @@ type Repository interface {
 	GetCoupon(ctx context.Context, id string, amount int) model.CouponRes
 	GetWallAmt(ctx context.Context, id string, amount int) float32
 	CreateWallet(ctx context.Context, id string) error
-	CreateOrder(ctx context.Context, order model.InsertOrder) (string, error)
+	CreateOrder(ctx context.Context, order model.InsertOrder) (string, string, error)
 	//AddToPayment(ctx context.Context, request model.Order, fiData model.FirstAddOrder, status string, username string) (string, error)
 	AddOrderItems(ctx context.Context, cartData model.CartresponseData, OrderID string, id string) error
 	MakePayment(ctx context.Context, paySt model.PaymentInsert) (string, error)
 	UpdateStock(ctx context.Context, value interface{}) error
+	UpdateWallet(ctx context.Context, value interface{}) (string, error)
+	UpdateWalletTransaction(ctx context.Context, value interface{}) error
 }
 
 type repository struct {
@@ -55,6 +58,70 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) UpdateWalletTransaction(ctx context.Context, value interface{}) error {
+	values, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid input")
+	}
+	Amt := values[0]
+	id := values[1]
+	Type := values[2]
+	fmt.Println("this is the UpdateWalletTransaction in repo!!@@@@@", reflect.TypeOf(Amt), "____", Amt, "!!", id, "##", Type)
+	query := `
+	INSERT INTO wallet_transactions (
+		wallet_id,
+		amount,
+		transaction_type,
+		created_at
+		
+	) VALUES (
+		$1, $2, $3, CURRENT_TIMESTAMP
+	) RETURNING id;
+`
+	var tid string
+
+	err := r.sql.QueryRowContext(ctx, query, id, Amt, Type).Scan(&tid)
+	if err != nil {
+		return fmt.Errorf("there is error in insertion")
+	}
+
+	return nil
+
+}
+func (r *repository) UpdateWallet(ctx context.Context, value interface{}) (string, error) {
+
+	fmt.Println(value)
+	///!!!!!!!!!!!!!!!!!!!!!!!
+	values, ok := value.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("invalid input")
+	}
+
+	if len(values) != 2 {
+		return "", fmt.Errorf("invalid input: need 2 elements", len(values))
+	}
+
+	qua := values[0]
+	id := values[1]
+
+	////1//////!!!!!!!!!!!!!!!!!!!!
+
+	query := `
+	UPDATE wallet
+	SET balance = balance - $1
+	WHERE user_id = $2
+	RETURNING id;
+`
+	var Wallet_id string
+
+	err := r.sql.QueryRowContext(ctx, query, qua, id).Scan(&Wallet_id)
+	fmt.Println("hey adiii UpdateWallet????!!!!!", Wallet_id, "balance !", qua, "id!", id)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return Wallet_id, nil
 }
 func (r *repository) UpdateStock(ctx context.Context, value interface{}) error {
 
@@ -156,18 +223,19 @@ func (r *repository) AddOrderItems(ctx context.Context, cartDatas model.Cartresp
 
 	return nil
 }
-func (r *repository) CreateOrder(ctx context.Context, order model.InsertOrder) (string, error) {
+func (r *repository) CreateOrder(ctx context.Context, order model.InsertOrder) (string, string, error) {
 
 	query := `
         INSERT INTO orders (
             user_id,total_amount,discount,coupon_amount,wallet_money,payable_amount,
-            payment_method,address_id,status,cid,order_date,created_at,updated_at
+            payment_method,address_id,status,cid,order_date,created_at,updated_at,uuid
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-        ) RETURNING id;
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,uuid_generate_v4()
+        ) RETURNING id,uuid;
     `
 
 	var orderID string
+	var uuid string
 	err := r.sql.QueryRowContext(ctx, query,
 		order.Usid,
 		order.Amount,
@@ -179,12 +247,12 @@ func (r *repository) CreateOrder(ctx context.Context, order model.InsertOrder) (
 		order.Aid,
 		order.Status,
 		order.CouponId,
-	).Scan(&orderID)
+	).Scan(&orderID, &uuid)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute insert query: %w", err)
+		return "", "", fmt.Errorf("failed to execute insert query: %w", err)
 	}
 
-	return orderID, nil
+	return orderID, uuid, nil
 }
 func (r *repository) ActiveListing(ctx context.Context) ([]model.Coupon, error) {
 	fmt.Println("this is lia couppp")
