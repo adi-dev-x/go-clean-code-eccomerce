@@ -53,6 +53,15 @@ type Repository interface {
 	UpdateUsestatusCoupon(ctx context.Context, id string) error
 	UpdateOrderStatus(ctx context.Context, id string, status string) error
 	UpdatePaymentStatus(ctx context.Context, id string, status string) error
+	ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
+	ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
+	ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
+	ListCompletedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
+	ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
+	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrders, error)
+	IncreaseStock(ctx context.Context, id string, unit int) error
+	UpdateOiStatus(ctx context.Context, id string) error
+	CreditWallet(ctx context.Context, id string, amt float64) (string, error)
 }
 
 type repository struct {
@@ -63,6 +72,210 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (string, error) {
+	query := `
+	UPDATE wallet
+	SET balance = balance + $1
+	WHERE user_id = $2
+	RETURNING id;
+`
+	var Wallet_id string
+	err := r.sql.QueryRowContext(ctx, query, amt, id).Scan(&Wallet_id)
+	fmt.Println("hey adiii CreditWallet????!!!!!", Wallet_id, "wallet_id !", "id!", id)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return Wallet_id, nil
+}
+func (r *repository) UpdateOiStatus(ctx context.Context, id string) error {
+
+	query := `
+	UPDATE order_items
+	SET returned = true
+	WHERE id = $1
+	RETURNING id;
+`
+	var Oi_id string
+	err := r.sql.QueryRowContext(ctx, query, id).Scan(&Oi_id)
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return nil
+}
+func (r *repository) IncreaseStock(ctx context.Context, id string, unit int) error {
+	fmt.Println("this is in the IncreaseStock!!", id, "unitss ", unit)
+	query := `
+	UPDATE product_models
+	SET units = units + $1
+	WHERE id = $2
+	RETURNING id;
+`
+	var Product_id string
+	err := r.sql.QueryRowContext(ctx, query, unit, id).Scan(&Product_id)
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return nil
+
+}
+func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrders, error) {
+	var order model.ListAllOrders
+
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id AS pid FROM order_items oi 
+   JOIN product_models p ON oi.product_id = p.id 
+   JOIN orders mo ON oi.order_id = mo.id 
+   where oi.user_id=$1 AND oi.id=$2;
+   
+`
+	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid)
+	if err != nil {
+		return model.ListAllOrders{}, fmt.Errorf("error in exequting query in  GetSingleItem")
+	}
+	return order, nil
+}
+func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1;
+`
+	var orders []model.ListAllOrders
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrders
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
+}
+func (r *repository) ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1 AND oi.returned=true;
+`
+	var orders []model.ListAllOrders
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrders
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
+}
+func (r *repository) ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1 AND mo.status='Failed';
+`
+	var orders []model.ListAllOrders
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrders
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
+}
+func (r *repository) ListCompletedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1 AND mo.status='Completed';
+`
+	var orders []model.ListAllOrders
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrders
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
+}
+func (r *repository) ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1 AND mo.status='Pending';
+`
+	var orders []model.ListAllOrders
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrders
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
 }
 func (r *repository) UpdateOrderStatus(ctx context.Context, id string, status string) error {
 	fmt.Println("this is in the UpdateOrderStatus ", id)
@@ -155,6 +368,7 @@ func (r *repository) UpdateWalletTransaction(ctx context.Context, value interfac
 	return nil
 
 }
+
 func (r *repository) UpdateWallet(ctx context.Context, value interface{}) (string, error) {
 
 	fmt.Println(value)
