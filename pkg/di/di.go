@@ -20,11 +20,12 @@ func InitializeEvent(conf config.Config) (*bootserver.ServerHttp, error) {
 
 	// Create a new repository using the *sql.DB instance
 	userRepository := user.NewRepository(sqlDB)
-	userService := user.NewService(userRepository)
+
 	myService := services.MyService{Config: conf}
+	userService := user.NewService(userRepository, myService)
 	// admjwt := middleware.Adminjwt{Config: conf}
 	admjwt := user.Adminjwt{Config: conf}
-	userHandler := user.NewHandler(userService, myService, admjwt)
+	userHandler := user.NewHandler(userService, myService, admjwt, conf)
 
 	vendorRepository := vendor.NewRepository(sqlDB)
 	vendorService := vendor.NewService(vendorRepository)

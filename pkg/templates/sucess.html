@@ -1,54 +1,166 @@
-
-
-<html>
-  <head>
-    <link href="https://fonts.googleapis.com/css?family=Nunito+Sans:400,400i,700,900&display=swap" rel="stylesheet">
-  </head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Gateway</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
     <style>
-      
-      body {
-        text-align: center;
-        padding: 40px 0;
-        background: #EBF0F5;
-      }
-        h1 {
-          color: #88B04B;
-          font-family: "Nunito Sans", "Helvetica Neue", sans-serif;
-          font-weight: 900;
-          font-size: 40px;
-          margin-bottom: 10px;
+        .container {
+            display: block; /* Ensures container uses block display */
         }
-        p {
-          color: #404F5E;
-          font-family: "Nunito Sans", "Helvetica Neue", sans-serif;
-          font-size:20px;
-          margin: 0;
+
+        .card {
+            display: block; /* Ensures card uses block display */
+            margin: 0 auto; /* Center card horizontally */
         }
-      i {
-        color: #9fc665;
-        font-size: 100px;
-        line-height: 200px;
-        margin-left:-15px;
-      }
-      .card {
-        background: white;
-        padding: 60px;
-        border-radius: 4px;
-        box-shadow: 0 2px 3px #C8D0D8;
-        display: inline-block;
-        margin: 0 auto;
-      }
+
+        .form-control {
+            display: block; /* Ensures form controls use block display */
+        }
+
+        .btn-primary {
+            display: block; /* Ensures button uses block display */
+        }
+
+        .success-message {
+            display: none; /* Hide the success message by default */
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .hidden {
+            display: none; /* Utility class to hide elements */
+        }
     </style>
-    <body>
-      <div class="card">
-      <div style="border-radius:200px; height:200px; width:200px; background: #F8FAF5; margin:0 auto;">
-        <i class="checkmark">✓</i>
-      </div>
-        <h1>Success</h1> 
-        <p>Thank you for using Using Our Service Come Again!!</p>
-        <h4>Your Payment ID = {{.paymentID}}</h4>
-        <h4>Your Amount Paid = {{.amountPaid}}</h4>
-        <h4>Your InvoiceID = {{.invoiceID}}</h4>
-      </div>
-    </body>
+</head>
+<body>
+
+<div class="container mt-5 pt-5">
+    <div class="card w-50 mx-auto">
+        <div class="card-body">
+            <h1 class="mb-4 text-center">Payment Gateway</h1>
+            
+            <!-- Payment form -->
+            <form id="payment-form">
+                <!-- Invoice ID field -->
+                <div class="mb-3">
+                    <label for="invoiceid" class="form-label">Order ID</label>
+                    <input type="text" class="form-control" id="invoiceid" value="{{.Order_ID}}" readonly>
+                </div>
+                
+                <!-- Appointment ID field -->
+                <div class="mb-3">
+                    <label for="paymentid" class="form-label">Payment ID</label>
+                    <input type="text" class="form-control" id="paymentid" value="{{.Payment_ID}}" readonly>
+                </div>
+                
+                <!-- Total Amount field -->
+                <div class="mb-3">
+                    <label for="total" class="form-label">Total Amount</label>
+                    <input type="number" class="form-control" id="total" value="{{.totalAmount}}" readonly>
+                </div>
+                
+                <!-- Submit button -->
+                <div class="text-center">
+                    <button type="button" id="rzp-button1" onclick="run()" class="btn btn-primary w-50">Submit</button>
+                </div>
+            </form>
+
+            <!-- Success message section -->
+            <div id="success-message" class="success-message">
+                <h2>Success</h2>
+                <p>Your payment was successful!</p>
+                <p>Order ID: <span id="success-order-id"></span></p>
+                <p>Payment ID: <span id="success-payment-id"></span></p>
+                <p>Amount Paid: <span id="success-amount-paid"></span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    var UserToken;
+    const url = window.location.href;
+    console.log("Full URL:", url);
+    const match = url.match(/\/([^\/]+)\/?$/);
+    if (match) {
+        UserToken = match[1];
+    } else {
+        UserToken = '';
+    }
+
+    console.log("UserToken:", UserToken);
+    
+    function getUrlParameter(name) {
+        name = name.replace(/[[]/, '\\[').replace(/[\]]/, '\\]');
+        var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+        var results = regex.exec(location.search);
+        return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    }
+
+    function run() {
+        const invoiceID = getUrlParameter('invoiceID');
+        const appointmentID = getUrlParameter('appointmentID');
+        const totalAmount = document.getElementById("total").value;
+
+        var options = {
+            key: 'rzp_test_mRydipg2bgDZmQ',
+            amount: totalAmount * 100,
+            currency: 'INR',
+            name: 'Ecom',
+            description: 'Test Transaction',
+            image: 'https://your-image-url.com/logo.png',
+            order_id: appointmentID,
+
+            handler: function(response) {
+                // Hide the form
+                alert('Adiiiii    Payment successful: ' + response.razorpay_payment_id);
+                const apiURL = `http://localhost:8080/RazorPaySucess/${UserToken}/`;
+                        console.log("this is the api url ##   ",apiURL)
+
+                        fetch(apiURL)
+                             .catch(error => {
+                               console.error('There was a problem with the fetch operation:', error);
+                         });  
+         
+                         alert(apiURL)
+                         console.log(apiURL)
+                document.getElementById('payment-form').classList.add('hidden');
+                
+                // Show success message
+                document.getElementById('success-order-id').textContent = appointmentID;
+                document.getElementById('success-payment-id').textContent = response.razorpay_payment_id;
+                document.getElementById('success-amount-paid').textContent = totalAmount;
+                document.getElementById('success-message').style.display = 'block'; // Show success message
+                
+          
+            },
+            prefill: {
+                contact: '{{.phoneNumber}}'
+            },
+            theme: {
+                color: '#3399cc'
+            }
+        };
+
+        var rzp1 = new Razorpay(options);
+        document.getElementById('rzp-button1').onclick = function(e) {
+            rzp1.open();
+            e.preventDefault();
+        };
+
+        rzp1.on('payment.failed', function(response) {
+            alert('Payment failed: ' + response.error.code);
+        });
+    }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+</body>
 </html>

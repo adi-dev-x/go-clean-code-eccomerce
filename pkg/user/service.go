@@ -2,9 +2,14 @@ package user
 
 import (
 	"context"
+	"sync"
+
 	"fmt"
+	services "myproject/pkg/client"
 	"myproject/pkg/config"
 	"myproject/pkg/model"
+
+	//"sync"
 
 	"regexp"
 	"strings"
@@ -35,18 +40,23 @@ type Service interface {
 	ListWish(ctx context.Context, id string) ([]model.UserWishview, error)
 	ListAddress(ctx context.Context, username string) ([]model.Address, error)
 	ActiveListing(ctx context.Context) ([]model.Coupon, error)
-	AddToCheck(ctx context.Context, request model.CheckOut, username string) error
+	AddToCheck(ctx context.Context, request model.CheckOut, username string) (model.RZpayment, error)
+	PaymentSuccess(ctx context.Context, rz model.RZpayment, username string) error
+	PaymentFailed(ctx context.Context, rz model.RZpayment, username string) error
 }
 type service struct {
-	repo   Repository
-	Config config.Config
+	repo     Repository
+	Config   config.Config
+	services services.Services
 }
 
-func NewService(repo Repository) Service {
+func NewService(repo Repository, services services.Services) Service {
 	return &service{
-		repo: repo,
+		repo:     repo,
+		services: services,
 	}
 }
+
 func (s *service) ListAddress(ctx context.Context, username string) ([]model.Address, error) {
 	id := s.repo.Getid(ctx, username)
 	select {
@@ -134,7 +144,7 @@ func (s *service) AddToorder(ctx context.Context, request model.Order) (model.RZ
 	//fmt.Println("this is the status ", status)
 	return k, nil
 }
-func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, username string) error {
+func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, username string) (model.RZpayment, error) {
 	id := s.repo.Getid(ctx, username)
 	Paymentstatus := "Pending"
 	fmt.Println("inside the service corrected Addto order ", id)
@@ -167,15 +177,25 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	PayType := request.Type
 	fmt.Println("klkl", PayType)
 	couponAmt := 0
+	var maxCAmt int
 	var coupon = model.CouponRes{}
+	k, err := s.repo.GetCartExist(ctx, id)
+	fmt.Println("checking exist or notttttt!!!!!!!", k)
+	if k == "" {
+		fmt.Println("ifffff   checking exist in ifffff notttttt!!!!!!!")
+		return model.RZpayment{}, fmt.Errorf("no order exist for the user: %w")
+
+	}
 	if cid != "" {
 		coupon = s.repo.GetCoupon(ctx, cid, amount)
 		errValues := coupon.Valid()
 		if len(errValues) > 0 {
 			// return fmt.Errorf(map[string]interface{}{"invalid": errValues})
-			return fmt.Errorf("invalid", errValues)
+			return model.RZpayment{}, fmt.Errorf("invalid", errValues)
 		}
 		couponAmt = coupon.Amount
+
+		maxCAmt = coupon.Maxamount
 		fmt.Println("this is coupon!!!!!", coupon, "this is checks ", coupon.Is_expired, "this is eligible ", coupon.Is_eligible)
 
 	}
@@ -190,6 +210,11 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	}
 
 	Camt := (float64(couponAmt) / 100.0) * float64(amount)
+	fmt.Println("this is the comparison of coupon amt --- ", Camt, " --max amt - ", maxCAmt)
+	if maxCAmt < int(Camt) {
+
+		return model.RZpayment{}, fmt.Errorf("this is more than the limit of the coupon")
+	}
 	fmt.Println("this is the calculation vart!!", Camt, couponAmt, amount, w_amt, PayType, request.Aid, Paymentstatus)
 	var newAmount float64
 	walletDeduction := 0.0
@@ -219,20 +244,31 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		Status:     Paymentstatus,
 		CouponId:   cid,
 	}
+	fmt.Println("this is cid in  checkout ", cid)
 	OrderID, uuid, err := s.repo.CreateOrder(ctx, order)
 	if err != nil {
-		return fmt.Errorf("failed to create order: %w", err)
+		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
 	}
 
 	fmt.Println("Order created with ID:!!!!", OrderID, uuid)
 
-	// Placeorderlist := make(chan model.Placeorderlist)
+	/// seng email
+	/// sending Email
+	var w sync.WaitGroup
+	Err := make(chan error, 1) // Buffered channel to avoid deadlock
 
-	// PlacePayment := make(chan string)
-	//err := s.repo.AddOrderItems(ctx, cartData, OrderID)
-	err = s.repo.AddOrderItems(ctx, cartData, OrderID, id)
-	if err != nil {
-		return fmt.Errorf("failed to create order: %w", err)
+	w.Add(1)
+	go func() {
+		defer w.Done()
+		err := s.services.SendOrderConfirmationEmail(uuid, newAmount, username)
+		Err <- err // Send the error or nil to the channel
+	}()
+
+	w.Wait()
+	close(Err)
+
+	if err := <-Err; err != nil {
+		return model.RZpayment{}, fmt.Errorf("failed to send order confirmation email: %w", err)
 	}
 	ty := request.Type
 	paySt := model.PaymentInsert{
@@ -244,19 +280,210 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	}
 	PaymentId, err := s.repo.MakePayment(ctx, paySt)
 	if err != nil {
-		return fmt.Errorf("failed to create order: %w", err)
+		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
 	}
+
+	err = s.repo.AddOrderItems(ctx, cartData, OrderID, id, PaymentId)
+	if err != nil {
+		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+	}
+
 	fmt.Println("this the payment id!!", PaymentId)
 
-	if ty != "ONLINE" {
+	if ty != "ONLINE" || newAmount == 0 {
+		j := make(chan error, 1)
+		p := make(chan int)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			jf := s.PostCheckout(ctx, PaymentId, OrderID, cartData, id, walletDeduction)
+			p <- jf
+		}()
+		go func() {
+			defer wg.Done()
+			if cid != "" {
+				fmt.Println("this is the couponnnnn!!!!!", cid)
+				err := s.repo.UpdateUsestatusCoupon(ctx, cid)
+				if err != nil {
+					j <- err
+				} else {
+					j <- nil
+				}
 
-		s.PostCheckout(ctx, PaymentId, OrderID, cartData, id, walletDeduction)
+			}
+		}()
+		go func() {
+			wg.Wait()
+			close(p)
+			close(j) // Close the channel after all goroutines are done
+		}()
+		kl := <-p
+		if kl != 1 {
+			return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+
+		}
+		Lrr := <-j
+		if Lrr != nil {
+			return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+		}
+
+	} else {
+
+		var rz model.RZpayment
+		rz.Amt = newAmount
+		rz.Id = PaymentId
+		rz.Order_ID = uuid
+		rz.CartData = cartData
+		rz.WalletDeduction = walletDeduction
+		rz.User_id = id
+		rz.Oid = OrderID
+		rz.Cid = cid
+
+		return rz, nil
+
+	}
+
+	return model.RZpayment{}, nil
+}
+func (s *service) PaymentFailed(ctx context.Context, rz model.RZpayment, username string) error {
+	fmt.Println("inside PaymentFailed")
+	//id := s.repo.Getid(ctx, username)
+	OrUpstat := make(chan error, 1)
+	PayUpstat := make(chan error, 1)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		UO := s.repo.UpdateOrderStatus(ctx, rz.Order_ID, "Failed")
+
+		if UO != nil {
+			OrUpstat <- UO
+		} else {
+			OrUpstat <- nil
+		}
+		//close(OrUpstat)
+	}()
+
+	go func() {
+		defer wg.Done()
+		UP := s.repo.UpdatePaymentStatus(ctx, rz.Id, "Failed")
+
+		if UP != nil {
+			PayUpstat <- UP
+		} else {
+			PayUpstat <- nil
+		}
+
+		//close(PayUpstat)
+	}()
+	go func() {
+		wg.Wait()
+		close(OrUpstat)
+		close(PayUpstat)
+	}()
+	Lrr1 := <-OrUpstat
+	if Lrr1 != nil {
+		return fmt.Errorf("failed to post order:")
+	}
+	fmt.Println("in ! 1 check")
+	Lrr2 := <-PayUpstat
+	if Lrr2 != nil {
+		return fmt.Errorf("failed to post order:")
 	}
 
 	return nil
 }
-func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID string, cartData model.CartresponseData, id string, walletDeduction float64) {
+func (s *service) PaymentSuccess(ctx context.Context, rz model.RZpayment, username string) error {
+	fmt.Println("inside PaymentSuccess")
 
+	id := s.repo.Getid(ctx, username)
+
+	OrUpstat := make(chan error, 1)
+	PayUpstat := make(chan error, 1)
+	PostCheck := make(chan int)
+	CoUpstat := make(chan error, 1)
+
+	var wg sync.WaitGroup
+
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+		UO := s.repo.UpdateOrderStatus(ctx, rz.Order_ID, "Completed")
+
+		if UO != nil {
+			OrUpstat <- UO
+		} else {
+			OrUpstat <- nil
+		}
+		//close(OrUpstat)
+	}()
+
+	go func() {
+		defer wg.Done()
+		UP := s.repo.UpdatePaymentStatus(ctx, rz.Id, "Completed")
+
+		if UP != nil {
+			PayUpstat <- UP
+		} else {
+			PayUpstat <- nil
+		}
+
+		//close(PayUpstat)
+	}()
+	go func() {
+		defer wg.Done()
+		if rz.Cid != "" {
+			fmt.Println("this is the couponnnnn!!!!!", rz.Cid)
+			err := s.repo.UpdateUsestatusCoupon(ctx, rz.Cid)
+			if err != nil {
+				CoUpstat <- err
+			} else {
+				CoUpstat <- nil
+			}
+
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		jf := s.PostCheckout(ctx, rz.Id, rz.Oid, rz.CartData, id, rz.WalletDeduction)
+		PostCheck <- jf
+		//close(PostCheck)
+	}()
+
+	go func() {
+		wg.Wait()
+		close(OrUpstat)
+		close(PayUpstat) // Close the channel after all goroutines are done
+		close(PostCheck)
+		close(CoUpstat)
+	}()
+
+	Lrr1 := <-OrUpstat
+	if Lrr1 != nil {
+		return fmt.Errorf("failed to post order:")
+	}
+	fmt.Println("in ! 1 check")
+	Lrr2 := <-PayUpstat
+	if Lrr2 != nil {
+		return fmt.Errorf("failed to post order:")
+	}
+	fmt.Println("in ! 2 check")
+	kl := <-PostCheck
+	if kl != 1 {
+		return fmt.Errorf("failed to post order:")
+
+	}
+	fmt.Println("in ! 2 check")
+
+	return nil
+}
+
+func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID string, cartData model.CartresponseData, id string, walletDeduction float64) int {
+	fmt.Println("this is in PostCheckout ", PaymentId, "#", OrderID, "#", cartData)
+	fmt.Println("this is in PostCheckout 222!!", id, "#", walletDeduction)
 	for _, v := range cartData.Data {
 		quantity := v.Unit
 		id := v.Pid
@@ -281,12 +508,16 @@ func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID st
 			fmt.Errorf("failed to create order: %w", err)
 		}
 	}
+	err = s.repo.DeleteCart(ctx, id)
+	if err != nil {
+		fmt.Errorf("failed to create order: %w", err)
+	}
+	fmt.Println("completed 3")
+	return 1
 
 }
 func (s *service) PayGateway(ctx context.Context, amt int) model.RZpayment {
 
-	//Razor_ID := s.Config.Razor_ID
-	//Razor_Secret := s.Config.Razor_SECRET
 	Razor_ID := "rzp_test_mRydipg2bgDZmQ"
 	Razor_Secret := "a2oY1G5RYIQh9gH04KWATpnx"
 	fmt.Println(" RZ keyyyyy ", Razor_ID, "  RZ ZSCERET ", Razor_Secret)
@@ -297,30 +528,14 @@ func (s *service) PayGateway(ctx context.Context, amt int) model.RZpayment {
 		"receipt":  "some_receipt_id",
 	}
 	body, _ := razorpayClient.Order.Create(data, nil)
-	// if err != nil {
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"Error": "Faied to create razorpay orer"})
-	// }
 
-	// Extract the order ID from the response body returned by the RazorPay API
-	//fmt.Println(" in bodyyyyyyy ", body)
 	value := body["id"]
 	fmt.Println(" in bodyyyyyyy id!!!!!", value)
 	str := value.(string)
 
-	// homepagevariables := PageVariable{
-	// 	AppointmentID: str,
-	// }
-	//return c.Render(http.StatusOK, "payment.html", map[string]interface{}{
-	// "invoiceID":     id,
-	// "totalPrice":    amountInPaisa / 100,
-	// "total":         amountInPaisa,
-	// "appointmentID": homepagevariables.AppointmentID,
-	// })
-
-	// return "success"
 	var p = model.RZpayment{
-		Id:  str,
-		Amt: amt,
+		Id: str,
+		// Amt: amt,
 	}
 	fmt.Println("ggg passs on RZPAy", p)
 

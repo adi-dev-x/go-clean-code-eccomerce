@@ -13,10 +13,33 @@ import (
 
 type Services interface {
 	GenerateOtp(length int) int
+
 	SendEmailWithOTP(email string) (string, error)
+	SendOrderConfirmationEmail(orderUUID string, amount float64, recipientEmail string) error
 }
 type MyService struct {
 	Config config.Config
+}
+
+func (s MyService) SendOrderConfirmationEmail(orderUUID string, amount float64, recipientEmail string) error {
+	fmt.Println("this is in the SendOrderConfirmationEmail !!!--", orderUUID, amount, recipientEmail)
+	// Message.
+	subject := "Order Confirmation"
+	body := fmt.Sprintf("Your order has been placed successfully!\nOrder UUID: %s\nAmount: RS%.2f", orderUUID, amount)
+	message := fmt.Sprintf("Subject: %s\r\n\r\n%s", subject, body)
+
+	// Authentication.
+	SMTPemail := s.Config.SMTPemail
+	SMTPpass := s.Config.Password
+	auth := smtp.PlainAuth("", SMTPemail, SMTPpass, "smtp.gmail.com")
+	fmt.Println("this is my mail !_+_++_+!", SMTPemail, "!+!+!+!+", SMTPpass)
+	// Sending email.
+	err := smtp.SendMail("smtp.gmail.com:587", auth, SMTPemail, []string{recipientEmail}, []byte(message))
+	if err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	return nil
 }
 
 // GenerateOtp generates a random OTP of the specified length.

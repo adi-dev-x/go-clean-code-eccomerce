@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"strings"
 	"time"
 
 	// db "myproject/pkg/database"
 	services "myproject/pkg/client"
+	"myproject/pkg/config"
 	db "myproject/pkg/database"
 
 	"myproject/pkg/model"
@@ -27,14 +29,16 @@ type Handler struct {
 	services  services.Services
 	adminjw   Adminjwt
 	templates *template.Template
+	cnf       config.Config
 }
 
-func NewHandler(service Service, srv services.Services, adTK Adminjwt) *Handler {
+func NewHandler(service Service, srv services.Services, adTK Adminjwt, cnf config.Config) *Handler {
 
 	return &Handler{
 		service:  service,
 		services: srv,
 		adminjw:  adTK,
+		cnf:      cnf,
 	}
 }
 func (h *Handler) MountRoutes(engine *echo.Echo) {
@@ -44,6 +48,8 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 	applicantApi.POST("/login", h.Login)
 	applicantApi.POST("/OtpLogin", h.OtpLogin)
 	engine.GET("/RazorPay/:id/", h.Gate)
+	engine.GET("/RazorPaySucess/:id/", h.GateSuccess)
+	engine.GET("/RazorPayFailed/:id/", h.GateFailed)
 	renderer := &Handler{
 		templates: template.Must(template.ParseGlob("pkg/templates/*.html")),
 	}
@@ -446,7 +452,18 @@ func (h *Handler) AddToCheck(c echo.Context) error {
 	}
 	///////this start
 
-	err := h.service.AddToCheck(ctx, request, username)
+	rz, err := h.service.AddToCheck(ctx, request, username)
+	if rz.Amt != 0 {
+		authHeader := c.Request().Header.Get("Authorization")
+		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
+		url := fmt.Sprintf("http://localhost:8080/RazorPay/%s/", tokenString)
+		f := username + "RZ"
+		dam, _ := json.Marshal(&rz)
+		db.SetRedis(f, dam, time.Minute*5)
+		fmt.Println("this is the url  ", url)
+		return h.respondWithData(c, http.StatusOK, "success", url)
+
+	}
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -457,19 +474,58 @@ func (h *Handler) Gate(c echo.Context) error {
 	fmt.Println("inside gatee RZPAy")
 
 	id := c.Param("id")
+	//username, err := AdminAuthentication(tokenString, s.Config.AdJWTKey)
+	username, _ := AdminAuthentication(id, h.cnf.AdJWTKey)
+	key := username + "RZ"
 	fmt.Println("this the id in Gate  !!!", id)
 	var storedData model.RZpayment
-	stored, _ := db.GetRedis(id)
+	stored, _ := db.GetRedis(key)
 	json.Unmarshal([]byte(stored), &storedData)
-	fmt.Println("data !!!", storedData, "amt !!!!!", storedData.Amt*100)
+	fmt.Println("data in razor pay!!!", storedData, "amt !!!!!", storedData.Amt*100)
 	b := int64(storedData.Amt)
 	data := map[string]interface{}{
-		"invoiceID":     20,
-		"appointmentID": 33,
-		"totalPrice":    b, // Replace with actual invoice ID if available
-		"totalAmount":   b,
-		"UserToken":     storedData.Token,
+		"Order_ID":    storedData.Order_ID,
+		"Payment_ID":  storedData.Id,
+		"totalPrice":  b, // Replace with actual invoice ID if available
+		"totalAmount": b,
+		"UserToken":   storedData.Token,
 	}
 	return c.Render(http.StatusOK, "payment.html", data)
+
+}
+func (h *Handler) GateSuccess(c echo.Context) error {
+	fmt.Println("inside gatee successs !!!!!!")
+	id := c.Param("id")
+	username, _ := AdminAuthentication(id, h.cnf.AdJWTKey)
+	key := username + "RZ"
+	var storedData model.RZpayment
+	stored, _ := db.GetRedis(key)
+	json.Unmarshal([]byte(stored), &storedData)
+	fmt.Println(storedData)
+	ctx := c.Request().Context()
+	err := h.service.PaymentSuccess(ctx, storedData, username)
+	fmt.Println("After GateSuccess completed")
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return h.respondWithData(c, http.StatusOK, "success", nil)
+
+}
+func (h *Handler) GateFailed(c echo.Context) error {
+	fmt.Println("inside gatee failed !!!!!!")
+	id := c.Param("id")
+	username, _ := AdminAuthentication(id, h.cnf.AdJWTKey)
+	key := username + "RZ"
+	var storedData model.RZpayment
+	stored, _ := db.GetRedis(key)
+	json.Unmarshal([]byte(stored), &storedData)
+	fmt.Println(storedData)
+	ctx := c.Request().Context()
+	err := h.service.PaymentFailed(ctx, storedData, username)
+	fmt.Println("After Gate Failed completed")
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return h.respondWithData(c, http.StatusOK, "success", nil)
 
 }

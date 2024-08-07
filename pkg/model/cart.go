@@ -37,6 +37,7 @@ type Coupon struct {
 	Expiry    string `json:"expiry"`
 	Minamount int    `json:"min_amount"`
 	Amount    int    `json:"amount"`
+	Maxamount int    `json:"max_amount"`
 }
 type CouponRes struct {
 	Cid         string `json:"cid"`
@@ -48,8 +49,8 @@ type CouponRes struct {
 	Is_expired  bool   `json:"is_expired"`
 	Is_eligible bool   `json:"is_eligible"`
 	Used        bool   `json:"used"`
-
-	Present bool
+	Maxamount   int    `json:"max_amount"`
+	Present     bool
 }
 type Cartresponse struct {
 	Cid      string `json:"cid"`
@@ -71,9 +72,15 @@ type FirstAddOrder struct {
 }
 
 type RZpayment struct {
-	Id    string
-	Amt   int
-	Token string
+	Id              string
+	Amt             float64
+	Token           string
+	Order_ID        string
+	CartData        CartresponseData
+	User_id         string
+	WalletDeduction float64
+	Oid             string
+	Cid             string
 }
 type Order struct {
 	Cartid       string `json:"cart_id"`

@@ -43,11 +43,16 @@ type Repository interface {
 	CreateWallet(ctx context.Context, id string) error
 	CreateOrder(ctx context.Context, order model.InsertOrder) (string, string, error)
 	//AddToPayment(ctx context.Context, request model.Order, fiData model.FirstAddOrder, status string, username string) (string, error)
-	AddOrderItems(ctx context.Context, cartData model.CartresponseData, OrderID string, id string) error
+	AddOrderItems(ctx context.Context, cartData model.CartresponseData, OrderID string, id string, pid string) error
 	MakePayment(ctx context.Context, paySt model.PaymentInsert) (string, error)
 	UpdateStock(ctx context.Context, value interface{}) error
 	UpdateWallet(ctx context.Context, value interface{}) (string, error)
 	UpdateWalletTransaction(ctx context.Context, value interface{}) error
+	DeleteCart(ctx context.Context, id string) error
+	GetCartExist(ctx context.Context, id string) (string, error)
+	UpdateUsestatusCoupon(ctx context.Context, id string) error
+	UpdateOrderStatus(ctx context.Context, id string, status string) error
+	UpdatePaymentStatus(ctx context.Context, id string, status string) error
 }
 
 type repository struct {
@@ -58,6 +63,67 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) UpdateOrderStatus(ctx context.Context, id string, status string) error {
+	fmt.Println("this is in the UpdateOrderStatus ", id)
+	query := `
+	UPDATE orders SET status = $1 WHERE uuid = $2;
+`
+
+	_, err := r.sql.ExecContext(ctx, query, status, id)
+
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+	fmt.Println("completed 1")
+	return nil
+
+}
+func (r *repository) UpdatePaymentStatus(ctx context.Context, id string, status string) error {
+	fmt.Println("this is in the UpdatePaymentStatus ", id)
+	query := `
+	UPDATE payment SET  payment_status = $1 WHERE id = $2;
+`
+
+	_, err := r.sql.ExecContext(ctx, query, status, id)
+
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+	fmt.Println("completed 2")
+	return nil
+
+}
+func (r *repository) UpdateUsestatusCoupon(ctx context.Context, id string) error {
+	query := `
+	UPDATE coupon SET used = true WHERE id = $1;
+`
+
+	_, err := r.sql.ExecContext(ctx, query, id)
+
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+	return nil
+
+}
+func (r *repository) DeleteCart(ctx context.Context, id string) error {
+	query := ` delete from cart where user_id=$1`
+	result, err := r.sql.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete from cart: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no cart found with id: %s", id)
+	}
+
+	return nil
 }
 func (r *repository) UpdateWalletTransaction(ctx context.Context, value interface{}) error {
 	values, ok := value.([]interface{})
@@ -172,6 +238,7 @@ func (r *repository) MakePayment(ctx context.Context, payment model.PaymentInser
 	) RETURNING id;
   `
 	var paymentID string
+
 	err := r.sql.QueryRowContext(ctx, query,
 		payment.OrderId,
 		payment.Usid,
@@ -185,7 +252,7 @@ func (r *repository) MakePayment(ctx context.Context, payment model.PaymentInser
 
 	return paymentID, nil
 }
-func (r *repository) AddOrderItems(ctx context.Context, cartDatas model.CartresponseData, orderID string, id string) error {
+func (r *repository) AddOrderItems(ctx context.Context, cartDatas model.CartresponseData, orderID string, id string, pid string) error {
 	fmt.Println("this is in the repo of AddOrderItems!!!", cartDatas.Data)
 	var (
 		queryBuilder strings.Builder
@@ -193,14 +260,14 @@ func (r *repository) AddOrderItems(ctx context.Context, cartDatas model.Cartresp
 	)
 	cartData := cartDatas.Data
 
-	queryBuilder.WriteString(`INSERT INTO order_items (order_id, product_id, quantity, price, discount, returned,user_id) VALUES `)
+	queryBuilder.WriteString(`INSERT INTO order_items (order_id, product_id, quantity, price, discount, returned,user_id,payment_id) VALUES `)
 
 	for i, item := range cartData {
 		if i > 0 {
 			queryBuilder.WriteString(", ")
 		}
-		queryBuilder.WriteString(fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d)", i*7+1, i*7+2, i*7+3, i*7+4, i*7+5, i*7+6, i*7+7))
-		values = append(values, orderID, item.Pid, item.Unit, item.Amount, item.Discount, false, id)
+		queryBuilder.WriteString(fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)", i*8+1, i*8+2, i*8+3, i*8+4, i*8+5, i*8+6, i*8+7, i*8+8))
+		values = append(values, orderID, item.Pid, item.Unit, item.Amount, item.Discount, false, id, pid)
 	}
 
 	query := queryBuilder.String()
@@ -224,13 +291,16 @@ func (r *repository) AddOrderItems(ctx context.Context, cartDatas model.Cartresp
 	return nil
 }
 func (r *repository) CreateOrder(ctx context.Context, order model.InsertOrder) (string, string, error) {
+	if order.CouponId == "" {
 
+		fmt.Println("yes its empltyy !!!!!!")
+	}
 	query := `
         INSERT INTO orders (
             user_id,total_amount,discount,coupon_amount,wallet_money,payable_amount,
             payment_method,address_id,status,cid,order_date,created_at,updated_at,uuid
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,uuid_generate_v4()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, '')::integer, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,uuid_generate_v4()
         ) RETURNING id,uuid;
     `
 
@@ -422,7 +492,7 @@ func (r *repository) GetCoupon(ctx context.Context, id string, amount int) model
 	fmt.Println("this is the coupon check amountsss !!!", amount, "!!!!!! this is id  ", id)
 
 	var query = `SELECT id AS cid, code, expiry, CURRENT_DATE AS current_date, CASE WHEN TO_DATE(expiry, 'DD/MM/YYYY') < CURRENT_DATE THEN true ELSE false END AS is_expired, 
-	CASE WHEN $1 > min_amount THEN true ELSE false END AS is_eligible, min_amount, amount, used FROM coupon WHERE id = $2;`
+	CASE WHEN $1 > min_amount THEN true ELSE false END AS is_eligible, min_amount, amount, used,max_amount FROM coupon WHERE id = $2;`
 
 	err := r.sql.QueryRowContext(ctx, query, amount, id).Scan(
 		&coupon.Cid,
@@ -434,6 +504,7 @@ func (r *repository) GetCoupon(ctx context.Context, id string, amount int) model
 		&coupon.Minamount,
 		&coupon.Amount,
 		&coupon.Used,
+		&coupon.Maxamount,
 	)
 
 	if err != nil {
@@ -466,13 +537,23 @@ func (r *repository) GetWallAmt(ctx context.Context, id string, amount int) floa
 }
 
 func (r *repository) GetCartById(ctx context.Context, cartId string) (model.Cart, error) {
-	query := `SELECT product_id, user_id, unit FROM cart WHERE id = $1`
+	query := `SELECT product_id, user_id, unit FROM cart WHERE id = $1 `
 	var cart model.Cart
 	err := r.sql.QueryRowContext(ctx, query, cartId).Scan(&cart.Productid, &cart.Userid, &cart.Unit)
 	if err != nil {
 		return model.Cart{}, fmt.Errorf("failed to get cart: %w", err)
 	}
 	return cart, nil
+}
+func (r *repository) GetCartExist(ctx context.Context, id string) (string, error) {
+	query := `SELECT id FROM cart WHERE user_id = $1 LIMIT 1`
+	var exist string
+	err := r.sql.QueryRowContext(ctx, query, id).Scan(&exist)
+	fmt.Println("this is in the repo layerrr for GetCartExist!!!", exist)
+	if err != nil {
+		return "", fmt.Errorf("failed to get cart: %w", err)
+	}
+	return exist, nil
 }
 func (r *repository) ListAddress(ctx context.Context, id string) ([]model.Address, error) {
 	fmt.Println("this is in repo of ListAddress!!####!!!", id)
