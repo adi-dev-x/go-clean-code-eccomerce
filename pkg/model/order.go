@@ -9,6 +9,7 @@ type ListAllOrders struct {
 	Returned bool    `json:"returned"`
 	Amount   float64 `json:"amount"`
 	Pid      string  `json:"pid"`
+	Date     string  `json:"date"`
 }
 
 type ReturnOrderPost struct {

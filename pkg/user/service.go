@@ -108,7 +108,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 			// value := []interface{}{p.Amount, id, "Credit"}
 			wallet_id, err = s.repo.CreditWallet(ctx, id, p.Amount)
 			if wallet_id != "" {
-				value := []interface{}{p.Amount, wallet_id, "Credit"}
+				value := []interface{}{p.Amount, wallet_id, "Credit", id}
 				er := s.repo.UpdateWalletTransaction(ctx, value)
 				if er != nil {
 					fmt.Println("there is erorrrr in wallet transaction")
@@ -646,7 +646,7 @@ func (s *service) PostCheckout(ctx context.Context, PaymentId string, OrderID st
 		fmt.Errorf("failed to create order: %w", err)
 	}
 	if walletDeduction != 0 {
-		value := []interface{}{walletDeduction, wallet_id, "Debit"}
+		value := []interface{}{walletDeduction, wallet_id, "Debit", id}
 		err := s.repo.UpdateWalletTransaction(ctx, value)
 		if err != nil {
 			fmt.Errorf("failed to create order: %w", err)
