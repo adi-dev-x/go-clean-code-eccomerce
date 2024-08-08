@@ -26,3 +26,15 @@ func (r *ReturnOrderPost) Valid() (err url.Values) {
 	return err
 
 }
+
+type ListOrdersVendor struct {
+	Name     string  `json:"name"`
+	Unit     int     `json:"unit"`
+	Status   string  `json:"status"`
+	Returned bool    `json:"returned"`
+	Amount   float64 `json:"amount"`
+	Pid      string  `json:"pid"`
+	Date     string  `json:"date"`
+	User     string  `json:"user"`
+	Add      string  `json:"user_ad"`
+}

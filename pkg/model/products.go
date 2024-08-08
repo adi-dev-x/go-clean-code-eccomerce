@@ -1,6 +1,8 @@
 package model
 
-import "net/url"
+import (
+	"net/url"
+)
 
 type Product struct {
 	Name        string  `json:"name"`
@@ -8,7 +10,7 @@ type Product struct {
 	Unit        float64 `json:"units"`
 	Tax         float64 `json:"tax"`
 	Price       float64 `json:"amount"`
-	Vendorid    int     `json:"vendor_id"`
+	Vendorid    string  `json:"vendor_id"`
 	Status      bool    `json:"status"`
 	Discount    float64 `json:"discount"`
 	Description string  `json:"description"`
@@ -40,6 +42,7 @@ func (u *Product) Valid() url.Values {
 		err.Add("tax", "Tax cannot be negative")
 	}
 	if u.Price <= 0 {
+
 		err.Add("price", "Price must be greater than zero")
 	}
 	if u.Discount < 0 {
@@ -47,6 +50,10 @@ func (u *Product) Valid() url.Values {
 	}
 	if u.Description == "" {
 		err.Add("description", "Description is required")
+	}
+	if u.Vendorid != "" {
+		err.Add("irrelevant value", "Dont enter vendor_id no irrevalant values")
+
 	}
 
 	return err

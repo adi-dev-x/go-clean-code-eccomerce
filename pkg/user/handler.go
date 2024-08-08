@@ -67,7 +67,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.POST("/AddTocart", h.AddToCart)
 		//applicantApi.POST("/AddTocart", h.AddToCart)
 		applicantApi.POST("/AddToWish", h.AddToWish)
-		applicantApi.GET("/Listcart/:id", h.Listcart)
+		applicantApi.GET("/Listcart/", h.Listcart)
 		applicantApi.GET("/ListWish/:id", h.ListWish)
 		applicantApi.POST("/AddToorder", h.AddToorder)
 		applicantApi.POST("/AddAddress", h.AddAddress)
@@ -75,6 +75,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.POST("/AddToCheck", h.AddToCheck)
 
 		applicantApi.GET("/listCoupon", h.ActiveListing)
+		///list orders
 		applicantApi.GET("/listAllOrders", h.ListAllOrders)
 		applicantApi.GET("/listReturnedOrders", h.ListReturnedOrders)
 		applicantApi.GET("/listFailedOrders", h.ListFailedOrders)
@@ -417,6 +418,10 @@ func (h *Handler) InZAListing(c echo.Context) error {
 
 func (h *Handler) AddToCart(c echo.Context) error {
 	fmt.Println("this is in the handler AddToCart")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	fmt.Println("inside the cart list ", username)
 
 	var request model.Cart
 	if err := c.Bind(&request); err != nil {
@@ -424,7 +429,7 @@ func (h *Handler) AddToCart(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	if err := h.service.AddTocart(ctx, request); err != nil {
+	if err := h.service.AddTocart(ctx, request, username); err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 

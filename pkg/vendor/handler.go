@@ -41,12 +41,14 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 	applicantApi.Use(h.adminjw.VendorAuthMiddleware())
 	{
 		applicantApi.POST("/AddProduct", h.AddProduct)
-		applicantApi.GET("/listing/:id", h.Listing)
-		applicantApi.GET("/Latestlisting/:id", h.LatestListing)
-		applicantApi.GET("/PhighListing/:id", h.PhighListing)
-		applicantApi.GET("/PlowListing/:id", h.PlowListing)
-		applicantApi.GET("/InAZListing/:id", h.InAZListing)
-		applicantApi.GET("/InZAListing/:id", h.InZAListing)
+		applicantApi.GET("/listing/", h.Listing)
+		applicantApi.GET("/Latestlisting/", h.LatestListing)
+		applicantApi.GET("/PhighListing/", h.PhighListing)
+		applicantApi.GET("/PlowListing/", h.PlowListing)
+		applicantApi.GET("/InAZListing/", h.InAZListing)
+		applicantApi.GET("/InZAListing/", h.InZAListing)
+		/// list orders
+		applicantApi.GET("/listAllOrders", h.ListAllOrders)
 
 	}
 }
@@ -66,6 +68,24 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 	}
 	return c.JSON(code, resp)
 }
+
+// /listing orders///
+func (h *Handler) ListAllOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	orders, err := h.service.ListAllOrders(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+
+// ////
 func (h *Handler) AddProduct(c echo.Context) error {
 	// Parse request body into VendorRegisterRequest
 	fmt.Println("this is in the handler AddProduct")
@@ -75,10 +95,17 @@ func (h *Handler) AddProduct(c echo.Context) error {
 	}
 
 	// Validate request fields
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
 
 	ctx := c.Request().Context()
-	if err := h.service.AddProduct(ctx, request); err != nil {
+	if err := h.service.AddProduct(ctx, request, username); err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	errVal := request.Valid()
+	if len(errVal) > 0 {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]interface{}{"invalid-request": errVal})
 	}
 	fmt.Println("this is in the handler Register")
 
@@ -178,7 +205,9 @@ func isValidPhoneNumber(phone string) bool {
 
 func (h *Handler) Listing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	id := c.Get("username").(string)
 	fmt.Println("this is the id from the paramsssss !!! ", id)
 
 	products, err := h.service.Listing(ctx, id)
@@ -190,7 +219,9 @@ func (h *Handler) Listing(c echo.Context) error {
 }
 func (h *Handler) LatestListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	id := c.Get("username").(string)
 	products, err := h.service.LatestListing(ctx, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
@@ -200,7 +231,9 @@ func (h *Handler) LatestListing(c echo.Context) error {
 }
 func (h *Handler) PhighListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	id := c.Get("username").(string)
 	products, err := h.service.PhighListing(ctx, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
@@ -210,7 +243,9 @@ func (h *Handler) PhighListing(c echo.Context) error {
 }
 func (h *Handler) PlowListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	id := c.Get("username").(string)
 	products, err := h.service.PlowListing(ctx, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
@@ -220,7 +255,9 @@ func (h *Handler) PlowListing(c echo.Context) error {
 }
 func (h *Handler) InAZListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	id := c.Get("username").(string)
 	products, err := h.service.InAZListing(ctx, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
@@ -230,7 +267,9 @@ func (h *Handler) InAZListing(c echo.Context) error {
 }
 func (h *Handler) InZAListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	id := c.Get("username").(string)
 	products, err := h.service.InZAListing(ctx, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})

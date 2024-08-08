@@ -39,20 +39,21 @@ type Repository interface {
 	GetcartAmt(ctx context.Context, id string) int
 	GetcartDis(ctx context.Context, id string) int
 	GetCoupon(ctx context.Context, id string, amount int) model.CouponRes
-	GetWallAmt(ctx context.Context, id string, amount int) float32
+
 	CreateWallet(ctx context.Context, id string) error
 	CreateOrder(ctx context.Context, order model.InsertOrder) (string, string, error)
 	//AddToPayment(ctx context.Context, request model.Order, fiData model.FirstAddOrder, status string, username string) (string, error)
 	AddOrderItems(ctx context.Context, cartData model.CartresponseData, OrderID string, id string, pid string) error
 	MakePayment(ctx context.Context, paySt model.PaymentInsert) (string, error)
 	UpdateStock(ctx context.Context, value interface{}) error
-	UpdateWallet(ctx context.Context, value interface{}) (string, error)
-	UpdateWalletTransaction(ctx context.Context, value interface{}) error
+
 	DeleteCart(ctx context.Context, id string) error
 	GetCartExist(ctx context.Context, id string) (string, error)
 	UpdateUsestatusCoupon(ctx context.Context, id string) error
 	UpdateOrderStatus(ctx context.Context, id string, status string) error
 	UpdatePaymentStatus(ctx context.Context, id string, status string) error
+
+	///orderss
 	ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
 	ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
 	ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
@@ -61,7 +62,12 @@ type Repository interface {
 	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrders, error)
 	IncreaseStock(ctx context.Context, id string, unit int) error
 	UpdateOiStatus(ctx context.Context, id string) error
+
+	///wallet
 	CreditWallet(ctx context.Context, id string, amt float64) (string, error)
+	UpdateWallet(ctx context.Context, value interface{}) (string, error)
+	UpdateWalletTransaction(ctx context.Context, value interface{}) error
+	GetWallAmt(ctx context.Context, id string, amount int) float32
 }
 
 type repository struct {

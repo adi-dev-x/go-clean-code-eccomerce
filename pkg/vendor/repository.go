@@ -18,6 +18,10 @@ type Repository interface {
 	PlowListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InAZListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InZAListing(ctx context.Context, id string) ([]model.ProductList, error)
+	Getid(ctx context.Context, username string) string
+
+	//orders
+	ListAllOrders(ctx context.Context, id string) ([]model.ListOrdersVendor, error)
 }
 
 type repository struct {
@@ -28,6 +32,59 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+
+// //orders
+func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.ListOrdersVendor, error) {
+	query := `SELECT 
+    p.name, oi.quantity, mo.status, oi.returned, oi.price, oi.product_id AS pid, 
+    DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
+    COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
+    COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad 
+    FROM order_items oi 
+    JOIN product_models p ON oi.product_id = p.id 
+    JOIN vendor v ON p.vendor_id = v.id 
+    JOIN orders mo ON oi.order_id = mo.id 
+    JOIN users u ON mo.user_id = u.id 
+    JOIN address a ON mo.address_id = a.address_id 
+    WHERE v.id = $1;`
+
+	var orders []model.ListOrdersVendor
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query in ListOrdersVendor: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListOrdersVendor
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return orders, nil
+}
+
+// //
+func (r *repository) Getid(ctx context.Context, username string) string {
+	var id string
+	fmt.Println("this is in the repository Register !!!")
+	query := `select id from vendor where email=$1;`
+	fmt.Println(query, username)
+	row := r.sql.QueryRowContext(ctx, query, username)
+	err := row.Scan(&id)
+	fmt.Println(err)
+	fmt.Println("this is id returning from Getid:::", id)
+
+	return id
 }
 
 func (r *repository) Register(ctx context.Context, request model.VendorRegisterRequest) error {
@@ -50,21 +107,28 @@ func (r *repository) AddProduct(ctx context.Context, request model.Product) erro
 
 	return nil
 }
-
 func (r *repository) Login(ctx context.Context, email string) (model.VendorRegisterRequest, error) {
-	fmt.Println("theee !!!!!!!!!!!  LLLLoginnnnnn  ", email)
+	fmt.Println("Attempting to login with email:", email)
+
+	// SQL query to fetch user details based on email
 	query := `SELECT name, gst, email, password FROM vendor WHERE email = $1`
-	fmt.Println(`SELECT name, gst, email, password FROM vendor WHERE email =  = 'adithyanunni258@gmail.com' ;`)
+	fmt.Printf("Executing query: %s\n", query)
 
 	var user model.VendorRegisterRequest
+
+	// Execute the query and scan the result into the user struct
 	err := r.sql.QueryRowContext(ctx, query, email).Scan(&user.Name, &user.GST, &user.Email, &user.Password)
 	if err != nil {
+		// Check if no rows were returned
 		if err == sql.ErrNoRows {
+			fmt.Println("No user found with the provided email.")
 			return model.VendorRegisterRequest{}, nil
 		}
+		// For other types of errors, wrap and return the error
 		return model.VendorRegisterRequest{}, fmt.Errorf("failed to find user by email: %w", err)
 	}
-	fmt.Println("the data !!!! ", user)
+
+	fmt.Println("User data retrieved:", user)
 
 	return user, nil
 }

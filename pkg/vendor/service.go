@@ -14,12 +14,15 @@ type Service interface {
 	Login(ctx context.Context, request model.VendorLoginRequest) error
 	Listing(ctx context.Context, id string) ([]model.ProductList, error)
 	OtpLogin(ctx context.Context, request model.VendorOtp) error
-	AddProduct(ctx context.Context, request model.Product) error
+	AddProduct(ctx context.Context, request model.Product, username string) error
 	LatestListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PhighListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PlowListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InAZListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InZAListing(ctx context.Context, id string) ([]model.ProductList, error)
+
+	///listing orders
+	ListAllOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 }
 
 type service struct {
@@ -31,6 +34,21 @@ func NewService(repo Repository) Service {
 		repo: repo,
 	}
 }
+
+// list alll oreders
+func (s *service) ListAllOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error) {
+	id := s.repo.Getid(ctx, username)
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListAllOrders(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+
+//
 
 func (s *service) Register(ctx context.Context, request model.VendorRegisterRequest) error {
 	var err error
@@ -73,32 +91,17 @@ func (s *service) Register(ctx context.Context, request model.VendorRegisterRequ
 	fmt.Println("this is in the service Register", request.Password)
 	return s.repo.Register(ctx, request)
 }
-func (s *service) AddProduct(ctx context.Context, request model.Product) error {
-	var err error
+func (s *service) AddProduct(ctx context.Context, request model.Product, username string) error {
+
 	fmt.Println("this is the product data ", request)
+	id := s.repo.Getid(ctx, username)
+	request.Vendorid = id
 
-	if request.Name == "" || request.Category == "" {
-		err = fmt.Errorf("missing values")
-		return err
+	err := s.repo.AddProduct(ctx, request)
+	if err != nil {
+		return fmt.Errorf("error in validating query")
 	}
-
-	// Validate units, tax, and price (consider edge cases)
-	if request.Unit < 0 {
-		err = fmt.Errorf("invalid unit value: must be non-negative")
-		return err
-		//return fmt.Errorf("invalid unit value: must be non-negative")
-	}
-	if request.Tax < 0 {
-		err = fmt.Errorf("invalid tax value: must be between 0 and 1 (inclusive)")
-		return err
-
-	}
-	if request.Price < 0 {
-		err = fmt.Errorf("invalid tax value: must be between 0 and 1 (inclusive)")
-		return err
-	}
-
-	return s.repo.AddProduct(ctx, request)
+	return nil
 }
 func (s *service) Login(ctx context.Context, request model.VendorLoginRequest) error {
 	fmt.Println("this is in the service Login", request.Password)
@@ -148,51 +151,57 @@ func (s *service) OtpLogin(ctx context.Context, request model.VendorOtp) error {
 //		return s.repo.Listing(ctx)
 //	}
 func (s *service) Listing(ctx context.Context, id string) ([]model.ProductList, error) {
+	d := s.repo.Getid(ctx, id)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.Listing(ctx, id)
+		return s.repo.Listing(ctx, d)
 	}
 }
 func (s *service) LatestListing(ctx context.Context, id string) ([]model.ProductList, error) {
+	d := s.repo.Getid(ctx, id)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.LatestListing(ctx, id)
+		return s.repo.LatestListing(ctx, d)
 	}
 }
 func (s *service) PhighListing(ctx context.Context, id string) ([]model.ProductList, error) {
+	d := s.repo.Getid(ctx, id)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.PhighListing(ctx, id)
+		return s.repo.PhighListing(ctx, d)
 	}
 }
 func (s *service) PlowListing(ctx context.Context, id string) ([]model.ProductList, error) {
+	d := s.repo.Getid(ctx, id)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.PlowListing(ctx, id)
+		return s.repo.PlowListing(ctx, d)
 	}
 }
 func (s *service) InAZListing(ctx context.Context, id string) ([]model.ProductList, error) {
+	d := s.repo.Getid(ctx, id)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.InAZListing(ctx, id)
+		return s.repo.InAZListing(ctx, d)
 	}
 }
 
 func (s *service) InZAListing(ctx context.Context, id string) ([]model.ProductList, error) {
+	d := s.repo.Getid(ctx, id)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.InZAListing(ctx, id)
+		return s.repo.InZAListing(ctx, d)
 	}
 }

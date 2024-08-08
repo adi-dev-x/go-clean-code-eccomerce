@@ -32,8 +32,12 @@ type Service interface {
 	InZAListing(ctx context.Context) ([]model.ProductList, error)
 	OtpLogin(ctx context.Context, request model.UserOtp) error
 	UpdateUser(ctx context.Context, updatedData model.UserRegisterRequest) error
-	AddTocart(ctx context.Context, request model.Cart) error
+
+	////cart and wish
+	AddTocart(ctx context.Context, request model.Cart, username string) error
 	AddToWish(ctx context.Context, request model.Wishlist) error
+
+	///
 	AddAddress(ctx context.Context, request model.Address, username string) error
 	AddToorder(ctx context.Context, request model.Order) (model.RZpayment, error)
 	Listcart(ctx context.Context, id string) ([]model.Usercartview, error)
@@ -43,6 +47,7 @@ type Service interface {
 	AddToCheck(ctx context.Context, request model.CheckOut, username string) (model.RZpayment, error)
 	PaymentSuccess(ctx context.Context, rz model.RZpayment, username string) error
 	PaymentFailed(ctx context.Context, rz model.RZpayment, username string) error
+	//list orders
 	ListAllOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ListReturnedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ListFailedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
@@ -220,8 +225,10 @@ func (s *service) ActiveListing(ctx context.Context) ([]model.Coupon, error) {
 	}
 
 }
-func (s *service) AddTocart(ctx context.Context, request model.Cart) error {
-	if request.Productid == "" || request.Unit == 0 || request.Userid == "" {
+func (s *service) AddTocart(ctx context.Context, request model.Cart, username string) error {
+
+	id := s.repo.Getid(ctx, username)
+	if request.Productid == "" || request.Unit == 0 {
 		fmt.Println("this is in the service error value missing")
 		return fmt.Errorf("missing values")
 	}
@@ -242,7 +249,7 @@ func (s *service) AddTocart(ctx context.Context, request model.Cart) error {
 		fmt.Println("not enough units available")
 		return fmt.Errorf("not enough units available")
 	}
-
+	request.Userid = id
 	// Add to cart
 	return s.repo.AddTocart(ctx, request)
 }
