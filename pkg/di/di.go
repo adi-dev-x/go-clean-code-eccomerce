@@ -28,7 +28,8 @@ func InitializeEvent(conf config.Config) (*bootserver.ServerHttp, error) {
 	userHandler := user.NewHandler(userService, myService, admjwt, conf)
 
 	vendorRepository := vendor.NewRepository(sqlDB)
-	vendorService := vendor.NewService(vendorRepository)
+	myService1 := services.MyService{Config: conf}
+	vendorService := vendor.NewService(vendorRepository, myService1)
 	vendorjwt := vendor.Vendorjwt{Config: conf} // Corrected import path
 	vendorHandler := vendor.NewHandler(vendorService, myService, vendorjwt)
 

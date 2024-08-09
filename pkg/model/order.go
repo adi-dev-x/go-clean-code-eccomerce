@@ -11,6 +11,28 @@ type ListAllOrders struct {
 	Pid      string  `json:"pid"`
 	Date     string  `json:"date"`
 }
+type ListAllOrdersUsers struct {
+	Name     string  `json:"name"`
+	Unit     int     `json:"unit"`
+	Status   string  `json:"status"`
+	Returned bool    `json:"returned"`
+	Amount   float64 `json:"amount"`
+	Pid      string  `json:"pid"`
+	Date     string  `json:"date"`
+	Oid      string  `json:"oid"`
+}
+type ListAllOrdersCheck struct {
+	Name     string  `json:"name"`
+	Unit     int     `json:"unit"`
+	Status   string  `json:"status"`
+	Returned bool    `json:"returned"`
+	Amount   float64 `json:"amount"`
+	Pid      string  `json:"pid"`
+	Date     string  `json:"date"`
+	Usid     string  `json:"user_id"`
+	Vid      string  `json:"vid"`
+	Usmail   string  `json:"usmail"`
+}
 
 type ReturnOrderPost struct {
 	Oid string `json:"oid"`

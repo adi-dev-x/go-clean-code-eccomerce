@@ -49,6 +49,11 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/InZAListing/", h.InZAListing)
 		/// list orders
 		applicantApi.GET("/listAllOrders", h.ListAllOrders)
+		applicantApi.GET("/listReturnedOrders", h.ListReturnedOrders)
+		applicantApi.GET("/listFailedOrders", h.ListFailedOrders)
+		applicantApi.GET("/listCompletedOrders", h.ListCompletedOrders)
+		applicantApi.GET("/listPendingOrders", h.ListPendingOrders)
+		applicantApi.POST("/returnItem", h.ReturnItem)
 
 	}
 }
@@ -69,7 +74,71 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 	return c.JSON(code, resp)
 }
 
-// /listing orders///
+// / orders///
+func (h *Handler) ReturnItem(c echo.Context) error {
+	fmt.Println("this is in the handler ReturnItem")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	fmt.Println("inside the cart list ", username)
+	ctx := c.Request().Context()
+
+	var request model.ReturnOrderPost
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	errValues := request.Valid()
+	if len(errValues) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": errValues})
+	}
+	err := h.service.ReturnItem(ctx, request, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return h.respondWithData(c, http.StatusOK, "success", nil)
+}
+func (h *Handler) ListPendingOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	orders, err := h.service.ListPendingOrders(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListCompletedOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	orders, err := h.service.ListCompletedOrders(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListFailedOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	orders, err := h.service.ListFailedOrders(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
 func (h *Handler) ListAllOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
 	authHeader := c.Request().Header.Get("Authorization")
@@ -77,6 +146,20 @@ func (h *Handler) ListAllOrders(c echo.Context) error {
 	username := c.Get("username").(string)
 	ctx := c.Request().Context()
 	orders, err := h.service.ListAllOrders(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListReturnedOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	orders, err := h.service.ListReturnedOrders(ctx, username)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
 	}

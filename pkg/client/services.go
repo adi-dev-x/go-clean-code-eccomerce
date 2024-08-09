@@ -16,7 +16,9 @@ type Services interface {
 
 	SendEmailWithOTP(email string) (string, error)
 	SendOrderConfirmationEmail(orderUUID string, amount float64, recipientEmail string) error
-	SendOrderReturnConfirmationEmail(name string, amt float64, unit int, mail string) error
+	SendOrderReturnConfirmationEmailUser(name string, amt float64, unit int, mail string) error
+	SendOrderReturnConfirmationEmailToUser(name string, amt float64, unit int, mail string)
+	SendOrderReturnConfirmationEmailVendor(name string, amt float64, unit int, mail string) error
 }
 type MyService struct {
 	Config config.Config
@@ -42,11 +44,50 @@ func (s MyService) SendOrderConfirmationEmail(orderUUID string, amount float64, 
 
 	return nil
 }
-func (s MyService) SendOrderReturnConfirmationEmail(name string, amt float64, unit int, recipientEmail string) error {
+func (s MyService) SendOrderReturnConfirmationEmailToUser(name string, amt float64, unit int, recipientEmail string) {
+	fmt.Println("this is in the SendOrderReturnConfirmationEmail !!!--", name, amt, recipientEmail)
+	// Message.
+	subject := "Vendor has Cancelled your order"
+	body := fmt.Sprintf("Your order %s has been placed for returning!\nunits: %d\nAmount: RS%.2f", name, unit, amt)
+	message := fmt.Sprintf("Subject: %s\r\n\r\n%s", subject, body)
+
+	// Authentication.
+	SMTPemail := s.Config.SMTPemail
+	SMTPpass := s.Config.Password
+	auth := smtp.PlainAuth("", SMTPemail, SMTPpass, "smtp.gmail.com")
+	fmt.Println("this is my mail !_+_++_+!", SMTPemail, "!+!+!+!+", SMTPpass)
+	// Sending email.
+	err := smtp.SendMail("smtp.gmail.com:587", auth, SMTPemail, []string{recipientEmail}, []byte(message))
+	if err != nil {
+		fmt.Errorf("failed to send email: %w", err)
+	}
+
+}
+func (s MyService) SendOrderReturnConfirmationEmailUser(name string, amt float64, unit int, recipientEmail string) error {
 	fmt.Println("this is in the SendOrderReturnConfirmationEmail !!!--", name, amt, recipientEmail)
 	// Message.
 	subject := "Order item returned"
 	body := fmt.Sprintf("Your order %s has been placed for returning!\nunits: %d\nAmount: RS%.2f", name, unit, amt)
+	message := fmt.Sprintf("Subject: %s\r\n\r\n%s", subject, body)
+
+	// Authentication.
+	SMTPemail := s.Config.SMTPemail
+	SMTPpass := s.Config.Password
+	auth := smtp.PlainAuth("", SMTPemail, SMTPpass, "smtp.gmail.com")
+	fmt.Println("this is my mail !_+_++_+!", SMTPemail, "!+!+!+!+", SMTPpass)
+	// Sending email.
+	err := smtp.SendMail("smtp.gmail.com:587", auth, SMTPemail, []string{recipientEmail}, []byte(message))
+	if err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	return nil
+}
+func (s MyService) SendOrderReturnConfirmationEmailVendor(name string, amt float64, unit int, recipientEmail string) error {
+	fmt.Println("this is in the SendOrderReturnConfirmationEmail !!!--", name, amt, recipientEmail)
+	// Message.
+	subject := "Customer placed for return"
+	body := fmt.Sprintf("A  order %s has been placed for returning!\nunits: %d\nAmount: RS%.2f", name, unit, amt)
 	message := fmt.Sprintf("Subject: %s\r\n\r\n%s", subject, body)
 
 	// Authentication.

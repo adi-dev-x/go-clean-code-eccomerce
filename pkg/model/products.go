@@ -25,6 +25,17 @@ type ProductList struct {
 	Status     bool    `json:"status"`
 	Discount   float64 `json:"discount"`
 }
+type ProductListUsers struct {
+	Name       string  `json:"name"`
+	Category   string  `json:"category"`
+	Unit       float64 `json:"units"`
+	Tax        float64 `json:"tax"`
+	Price      float64 `json:"amount"`
+	VendorName string  `json:"vendorName"`
+	Status     bool    `json:"status"`
+	Discount   float64 `json:"discount"`
+	Pid        string  `json:"pid"`
+}
 
 func (u *Product) Valid() url.Values {
 	err := url.Values{}

@@ -24,7 +24,7 @@ import (
 type Service interface {
 	Register(ctx context.Context, request model.UserRegisterRequest) error
 	Login(ctx context.Context, request model.UserLoginRequest) error
-	Listing(ctx context.Context) ([]model.ProductList, error)
+	Listing(ctx context.Context) ([]model.ProductListUsers, error)
 	LatestListing(ctx context.Context) ([]model.ProductList, error)
 	PhighListing(ctx context.Context) ([]model.ProductList, error)
 	PlowListing(ctx context.Context) ([]model.ProductList, error)
@@ -48,7 +48,7 @@ type Service interface {
 	PaymentSuccess(ctx context.Context, rz model.RZpayment, username string) error
 	PaymentFailed(ctx context.Context, rz model.RZpayment, username string) error
 	//list orders
-	ListAllOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
+	ListAllOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error)
 	ListReturnedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ListFailedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ListCompletedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
@@ -76,8 +76,13 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 		return fmt.Errorf("entered is wrong id", err)
 	}
 	fmt.Println("this is the single order ", p)
-	if p.Returned == true {
+	if p.Returned {
 		return fmt.Errorf("this item is already returned")
+
+	}
+
+	if p.Status == "Failed" {
+		return fmt.Errorf("this item is payment failed")
 
 	}
 	var w sync.WaitGroup
@@ -91,7 +96,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	w.Add(4)
 	go func() {
 		defer w.Done()
-		err := s.services.SendOrderReturnConfirmationEmail(p.Name, p.Amount, p.Unit, username)
+		err := s.services.SendOrderReturnConfirmationEmailUser(p.Name, p.Amount, p.Unit, username)
 		Err <- err
 	}()
 	go func() {
@@ -155,12 +160,12 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	return nil
 }
 
-func (s *service) ListAllOrders(ctx context.Context, username string) ([]model.ListAllOrders, error) {
+func (s *service) ListAllOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error) {
 	id := s.repo.Getid(ctx, username)
 	fmt.Println("inside the ListAllOrders ", id)
 	orders, err := s.repo.ListAllOrders(ctx, id)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("this is the error for listing all orders", err)
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("this is the error for listing all orders", err)
 	}
 
 	return orders, nil
@@ -814,7 +819,7 @@ func (s *service) UpdateUser(ctx context.Context, updatedData model.UserRegister
 	return s.repo.UpdateUser(ctx, query, args)
 }
 
-func (s *service) Listing(ctx context.Context) ([]model.ProductList, error) {
+func (s *service) Listing(ctx context.Context) ([]model.ProductListUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

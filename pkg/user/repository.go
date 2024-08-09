@@ -12,33 +12,40 @@ import (
 
 // ListWish
 type Repository interface {
+	Login(ctx context.Context, email string) (model.UserRegisterRequest, error)
 	Register(ctx context.Context, request model.UserRegisterRequest) (string, error)
-	AddTocart(ctx context.Context, request model.Cart) error
-	AddToWish(ctx context.Context, request model.Wishlist) error
 	UpdateUser(ctx context.Context, query string, args []interface{}) error
-	Listing(ctx context.Context) ([]model.ProductList, error)
-	ListingByid(ctx context.Context, id string) ([]model.ProductList, error)
+	ListAddress(ctx context.Context, id string) ([]model.Address, error)
+	AddAddress(ctx context.Context, request model.Address, id string) error
+
+	//cart and wishlist
 	Listcart(ctx context.Context, id string) ([]model.Usercartview, error)
 	ListWish(ctx context.Context, id string) ([]model.UserWishview, error)
+	AddTocart(ctx context.Context, request model.Cart) error
+	AddToWish(ctx context.Context, request model.Wishlist) error
+	GetCoupon(ctx context.Context, id string, amount int) model.CouponRes
+	GetcartAmt(ctx context.Context, id string) int
+	GetcartDis(ctx context.Context, id string) int
+	GetCartById(ctx context.Context, cartId string) (model.Cart, error)
+	GetcartRes(ctx context.Context, id string) ([]model.Cartresponse, error)
+	///
+
+	///product listing
+	Listing(ctx context.Context) ([]model.ProductListUsers, error)
 	LatestListing(ctx context.Context) ([]model.ProductList, error)
 	PhighListing(ctx context.Context) ([]model.ProductList, error)
 	PlowListing(ctx context.Context) ([]model.ProductList, error)
 	InAZListing(ctx context.Context) ([]model.ProductList, error)
 	InZAListing(ctx context.Context) ([]model.ProductList, error)
-	Login(ctx context.Context, email string) (model.UserRegisterRequest, error)
+	ListingByid(ctx context.Context, id string) ([]model.ProductList, error)
 	GetProductIDFromCart(ctx context.Context, cartId string) (string, error)
-	GetCartById(ctx context.Context, cartId string) (model.Cart, error)
+	///
+
 	UpdateProductUnits(ctx context.Context, productId string, newUnits float64) error
 	AddToorder(ctx context.Context, request model.Order) error
 	GetorderDetails(ctx context.Context, request model.Order) (model.FirstAddOrder, error)
 	ActiveListing(ctx context.Context) ([]model.Coupon, error)
 	Getid(ctx context.Context, username string) string
-	GetcartRes(ctx context.Context, id string) ([]model.Cartresponse, error)
-	ListAddress(ctx context.Context, id string) ([]model.Address, error)
-	AddAddress(ctx context.Context, request model.Address, id string) error
-	GetcartAmt(ctx context.Context, id string) int
-	GetcartDis(ctx context.Context, id string) int
-	GetCoupon(ctx context.Context, id string, amount int) model.CouponRes
 
 	CreateWallet(ctx context.Context, id string) error
 	CreateOrder(ctx context.Context, order model.InsertOrder) (string, string, error)
@@ -54,12 +61,12 @@ type Repository interface {
 	UpdatePaymentStatus(ctx context.Context, id string, status string) error
 
 	///orderss
-	ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
+	ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error)
 	ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
 	ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
 	ListCompletedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
 	ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
-	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrders, error)
+	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error)
 	IncreaseStock(ctx context.Context, id string, unit int) error
 	UpdateOiStatus(ctx context.Context, id string) error
 
@@ -128,37 +135,37 @@ func (r *repository) IncreaseStock(ctx context.Context, id string, unit int) err
 	return nil
 
 }
-func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrders, error) {
-	var order model.ListAllOrders
+func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error) {
+	var order model.ListAllOrdersCheck
 
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id AS pid, DATE(oi.created_at) AS date FROM order_items oi 
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id AS pid, DATE(oi.created_at) AS date,mo.user_id FROM order_items oi 
    JOIN product_models p ON oi.product_id = p.id 
    JOIN orders mo ON oi.order_id = mo.id 
    where oi.user_id=$1 AND oi.id=$2;
    
 `
-	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date)
+	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid)
 	if err != nil {
-		return model.ListAllOrders{}, fmt.Errorf("error in exequting query in  GetSingleItem")
+		return model.ListAllOrdersCheck{}, fmt.Errorf("error in exequting query in  GetSingleItem")
 	}
 	return order, nil
 }
-func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date FROM order_items oi 
+func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid FROM order_items oi 
 	JOIN product_models p ON oi.product_id = p.id 
 	JOIN orders mo ON oi.order_id = mo.id 
 	where oi.user_id=$1 ORDER BY oi.id DESC;
 `
-	var orders []model.ListAllOrders
+	var orders []model.ListAllOrdersUsers
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in exequting query in ListAllOrders ")
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var order model.ListAllOrders
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date)
+		var order model.ListAllOrdersUsers
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -953,7 +960,7 @@ func (r *repository) ListWish(ctx context.Context, id string) ([]model.UserWishv
 	return products, nil
 }
 
-func (r *repository) Listing(ctx context.Context) ([]model.ProductList, error) {
+func (r *repository) Listing(ctx context.Context) ([]model.ProductListUsers, error) {
 	query := `
 		SELECT 
 			product_models.name,
@@ -963,7 +970,8 @@ func (r *repository) Listing(ctx context.Context) ([]model.ProductList, error) {
 			product_models.amount,
 			product_models.status,
 			product_models.discount,
-			vendor.name AS vendorName  
+			vendor.name AS vendorName,
+			 product_models.id AS pid 
 		FROM 
 			product_models 
 		INNER JOIN 
@@ -975,10 +983,10 @@ func (r *repository) Listing(ctx context.Context) ([]model.ProductList, error) {
 	}
 	defer rows.Close()
 
-	var products []model.ProductList
+	var products []model.ProductListUsers
 	for rows.Next() {
-		var product model.ProductList
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName)
+		var product model.ProductListUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName, &product.Pid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}

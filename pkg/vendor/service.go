@@ -3,7 +3,10 @@ package vendor
 import (
 	"context"
 	"fmt"
+	services "myproject/pkg/client"
+	"myproject/pkg/config"
 	"myproject/pkg/model"
+	"sync"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -23,16 +26,119 @@ type Service interface {
 
 	///listing orders
 	ListAllOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListReturnedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListFailedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListCompletedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListPendingOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+
+	//returning
+	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
 }
 
 type service struct {
-	repo Repository
+	repo     Repository
+	Config   config.Config
+	services services.Services
 }
 
-func NewService(repo Repository) Service {
+func NewService(repo Repository, services services.Services) Service {
 	return &service{
-		repo: repo,
+		repo:     repo,
+		services: services,
 	}
+}
+
+// /returning
+func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error {
+	id := s.repo.Getid(ctx, username)
+	p, err := s.repo.GetSingleItem(ctx, id, request.Oid)
+	if err != nil {
+		return fmt.Errorf("entered is wrong id", err)
+	}
+	fmt.Println("this is the single order ", p)
+	if p.Returned {
+		return fmt.Errorf("this item is already returned")
+
+	}
+
+	if p.Status == "Failed" {
+		return fmt.Errorf("this item is payment failed")
+
+	}
+	var w sync.WaitGroup
+
+	Err := make(chan error, 1)
+	Err2 := make(chan error, 1)
+	Err3 := make(chan error, 1)
+	Err4 := make(chan error, 1)
+	w.Add(4)
+	go func() {
+		defer w.Done()
+		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
+		Err <- err
+	}()
+	go func() {
+		defer w.Done()
+		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
+		Err <- err
+	}()
+	go func() {
+		defer w.Done()
+		err := s.repo.IncreaseStock(ctx, p.Pid, p.Unit)
+		Err2 <- err
+	}()
+	go func() {
+		defer w.Done()
+		err := s.repo.UpdateOiStatus(ctx, request.Oid)
+		Err3 <- err
+	}()
+	go func() {
+		defer w.Done()
+		var err error
+		var wallet_id string
+		if p.Status == "Completed" {
+			fmt.Println("in 1st if")
+			// value := []interface{}{p.Amount, id, "Credit"}
+			wallet_id, err = s.repo.CreditWallet(ctx, p.Usid, p.Amount)
+			if wallet_id != "" {
+				value := []interface{}{p.Amount, wallet_id, "Credit", p.Usid}
+				er := s.repo.UpdateWalletTransaction(ctx, value)
+				if er != nil {
+					fmt.Println("there is erorrrr in wallet transaction")
+				}
+
+				fmt.Println("this is workingggg ist")
+			}
+		} else {
+			fmt.Println("in 1st else")
+			wallet_id = ""
+			err = nil
+		}
+		Err4 <- err
+
+	}()
+	go func() {
+		w.Wait()
+		close(Err)
+		close(Err2)
+		close(Err3)
+		close(Err4)
+	}()
+	if err := <-Err; err != nil {
+		return fmt.Errorf("failed to send order  return  email: %w", err)
+	}
+	if err := <-Err2; err != nil {
+		return fmt.Errorf("failed to update unit: %w", err)
+	}
+	if err := <-Err3; err != nil {
+		return fmt.Errorf("failed to update to redund status: %w", err)
+	}
+	if err := <-Err4; err != nil {
+		return fmt.Errorf("failed to update to redund status: %w", err)
+	}
+
+	return nil
+
 }
 
 // list alll oreders
@@ -41,6 +147,50 @@ func (s *service) ListAllOrders(ctx context.Context, username string) ([]model.L
 	fmt.Println("inside the ListAllOrders ", id)
 
 	orders, err := s.repo.ListAllOrders(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListReturnedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error) {
+	id := s.repo.Getid(ctx, username)
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListReturnedOrders(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListFailedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error) {
+	id := s.repo.Getid(ctx, username)
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListFailedOrders(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListCompletedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error) {
+	id := s.repo.Getid(ctx, username)
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListCompletedOrders(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListPendingOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error) {
+	id := s.repo.Getid(ctx, username)
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListPendingOrders(ctx, id)
 	if err != nil {
 		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
 	}
