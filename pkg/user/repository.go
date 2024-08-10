@@ -75,6 +75,11 @@ type Repository interface {
 	UpdateWallet(ctx context.Context, value interface{}) (string, error)
 	UpdateWalletTransaction(ctx context.Context, value interface{}) error
 	GetWallAmt(ctx context.Context, id string, amount int) float32
+
+	//transaction
+	ListAllTransactions(ctx context.Context, id string) ([]model.UserTransactions, error)
+
+	ListTypeTransactions(ctx context.Context, id string, ty string) ([]model.UserTransactions, error)
 }
 
 type repository struct {
@@ -86,6 +91,53 @@ func NewRepository(sqlDB *sql.DB) Repository {
 		sql: sqlDB,
 	}
 }
+
+// /transaction
+func (r *repository) ListAllTransactions(ctx context.Context, id string) ([]model.UserTransactions, error) {
+	query := `select id,amount,transaction_type from wallet_transactions where user_id=$1`
+	var transactions []model.UserTransactions
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+
+		return nil, fmt.Errorf("cant execute query", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var transaction model.UserTransactions
+		err := rows.Scan(&transaction.Id, &transaction.Amount, &transaction.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		transactions = append(transactions, transaction)
+
+	}
+	return transactions, nil
+
+}
+func (r *repository) ListTypeTransactions(ctx context.Context, id string, typ string) ([]model.UserTransactions, error) {
+	query := `select id,amount,transaction_type from wallet_transactions where user_id=$1 AND transaction_type=$2`
+	var transactions []model.UserTransactions
+
+	rows, err := r.sql.QueryContext(ctx, query, id, typ)
+	if err != nil {
+
+		return nil, fmt.Errorf("cant execute query", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var transaction model.UserTransactions
+		err := rows.Scan(&transaction.Id, &transaction.Amount, &transaction.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		transactions = append(transactions, transaction)
+
+	}
+	return transactions, nil
+
+}
+
 func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (string, error) {
 	query := `
 	UPDATE wallet

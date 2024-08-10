@@ -54,6 +54,9 @@ type Service interface {
 	ListCompletedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ListPendingOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
+
+	ListAllTransactions(ctx context.Context, username string) ([]model.UserTransactions, error)
+	ListTypeTransactions(ctx context.Context, username string, ty string) ([]model.UserTransactions, error)
 }
 type service struct {
 	repo     Repository
@@ -67,6 +70,34 @@ func NewService(repo Repository, services services.Services) Service {
 		services: services,
 	}
 }
+
+// /transactions
+func (s *service) ListAllTransactions(ctx context.Context, username string) ([]model.UserTransactions, error) {
+	id := s.repo.Getid(ctx, username)
+
+	transactions, err := s.repo.ListAllTransactions(ctx, id)
+	if err != nil {
+
+		return []model.UserTransactions{}, fmt.Errorf("there is error in fetching transactions")
+	}
+
+	return transactions, nil
+
+}
+func (s *service) ListTypeTransactions(ctx context.Context, username string, ty string) ([]model.UserTransactions, error) {
+	id := s.repo.Getid(ctx, username)
+
+	transactions, err := s.repo.ListTypeTransactions(ctx, id, ty)
+	if err != nil {
+
+		return []model.UserTransactions{}, fmt.Errorf("there is error in fetching transactions")
+	}
+
+	return transactions, nil
+
+}
+
+// ///
 func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error {
 	id := s.repo.Getid(ctx, username)
 	fmt.Println("inside the ReturnItem ", id)

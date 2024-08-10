@@ -83,6 +83,11 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listPendingOrders", h.ListPendingOrders)
 		applicantApi.POST("/returnItem", h.ReturnItem)
 
+		//// wallet transactions
+		applicantApi.GET("/listAllTransactions", h.ListAllTransactions)
+		applicantApi.GET("/listCreditTransactions", h.ListCreditTransactions)
+		applicantApi.GET("/listDetibTransactions", h.ListDetibTransactions)
+
 	}
 
 	engine.GET("/RazorPay", func(c echo.Context) error {
@@ -122,6 +127,37 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 	return c.JSON(code, resp)
 }
 
+// / list all transactions
+func (h *Handler) ListCreditTransactions(c echo.Context) error {
+	fmt.Println("in activeeee")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	ty := "Credit"
+	products, err := h.service.ListTypeTransactions(ctx, username, ty)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) ListAllTransactions(c echo.Context) error {
+	fmt.Println("in activeeee")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+
+	products, err := h.service.ListAllTransactions(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+
+// ///
 func (h *Handler) ActiveListing(c echo.Context) error {
 	fmt.Println("in activeeee")
 	ctx := c.Request().Context()
