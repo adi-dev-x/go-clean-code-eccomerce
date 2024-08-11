@@ -22,12 +22,14 @@ type Repository interface {
 	Listcart(ctx context.Context, id string) ([]model.Usercartview, error)
 	ListWish(ctx context.Context, id string) ([]model.UserWishview, error)
 	AddTocart(ctx context.Context, request model.Cart) error
+	UpdateToCart(ctx context.Context, request model.Cart) error
 	AddToWish(ctx context.Context, request model.Wishlist) error
 	GetCoupon(ctx context.Context, id string, amount int) model.CouponRes
 	GetcartAmt(ctx context.Context, id string) int
 	GetcartDis(ctx context.Context, id string) int
 	GetCartById(ctx context.Context, cartId string) (model.Cart, error)
 	GetcartRes(ctx context.Context, id string) ([]model.Cartresponse, error)
+	GetSpecificCart(ctx context.Context, userid string, pis string) (model.Cart, error)
 	///
 
 	///product listing
@@ -59,7 +61,7 @@ type Repository interface {
 	UpdateUsestatusCoupon(ctx context.Context, id string) error
 	UpdateOrderStatus(ctx context.Context, id string, status string) error
 	UpdatePaymentStatus(ctx context.Context, id string, status string) error
-
+	ItemExistsInCart(ctx context.Context, id string, status string) (bool, error)
 	///orderss
 	ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error)
 	ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
@@ -90,6 +92,26 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) ItemExistsInCart(ctx context.Context, userID string, productID string) (bool, error) {
+	fmt.Println("check exist in ,", userID, "pid !!", productID)
+	query := `
+		SELECT 1 
+		FROM cart 
+		WHERE product_id = $1 AND user_id = $2
+		LIMIT 1;
+	`
+
+	var exists int
+	err := r.sql.QueryRowContext(ctx, query, userID, productID).Scan(&exists)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return exists == 1, nil
 }
 
 // /transaction
@@ -701,7 +723,7 @@ func (r *repository) GetcartRes(ctx context.Context, id string) ([]model.Cartres
 	var cres []model.Cartresponse
 	fmt.Println("reached inside GetcartRes")
 
-	query := `SELECT c.id AS cid, c.user_id AS usid,c.product_id AS pid ,c.unit,p.amount,p.discount  FROM cart  c JOIN product_models p on c.product_id = p.id JOIN users u ON c.user_id=u.id WHERE u.id = $1`
+	query := `SELECT c.id AS cid, c.user_id AS usid,c.product_id AS pid ,c.unit,p.amount,p.discount,p.units AS p_units,p.name AS p_name  FROM cart  c JOIN product_models p on c.product_id = p.id JOIN users u ON c.user_id=u.id WHERE u.id = $1`
 	//rows, err := r.sql.QueryContext(ctx, query, username)
 	rows, err := r.sql.Query(query, id)
 	if err != nil {
@@ -710,7 +732,7 @@ func (r *repository) GetcartRes(ctx context.Context, id string) ([]model.Cartres
 	defer rows.Close()
 	for rows.Next() {
 		var cress model.Cartresponse
-		err := rows.Scan(&cress.Cid, &cress.Usid, &cress.Pid, &cress.Unit, &cress.Amount, &cress.Discount)
+		err := rows.Scan(&cress.Cid, &cress.Usid, &cress.Pid, &cress.Unit, &cress.Amount, &cress.Discount, &cress.P_Units, &cress.P_Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -827,6 +849,15 @@ func (r *repository) GetCartById(ctx context.Context, cartId string) (model.Cart
 	}
 	return cart, nil
 }
+func (r *repository) GetSpecificCart(ctx context.Context, userid string, pis string) (model.Cart, error) {
+	query := `SELECT product_id, user_id, unit FROM cart WHERE user_id = $1 AND product_id=$2 `
+	var cart model.Cart
+	err := r.sql.QueryRowContext(ctx, query, userid, pis).Scan(&cart.Productid, &cart.Userid, &cart.Unit)
+	if err != nil {
+		return model.Cart{}, fmt.Errorf("failed to get cart: %w", err)
+	}
+	return cart, nil
+}
 func (r *repository) GetCartExist(ctx context.Context, id string) (string, error) {
 	query := `SELECT id FROM cart WHERE user_id = $1 LIMIT 1`
 	var exist string
@@ -889,6 +920,18 @@ func (r *repository) AddTocart(ctx context.Context, request model.Cart) error {
 	query := `INSERT INTO cart (product_id, unit, user_id) VALUES ($1, $2, $3)`
 	fmt.Println(query, request.Productid, request.Unit, request.Userid)
 	_, err := r.sql.ExecContext(ctx, query, request.Productid, request.Unit, request.Userid)
+	if err != nil {
+		return fmt.Errorf("failed to execute insert query: %w", err)
+	}
+
+	return nil
+}
+func (r *repository) UpdateToCart(ctx context.Context, request model.Cart) error {
+	fmt.Println("this is in the repository Register !!!")
+	//query := `INSERT INTO cart (product_id, unit, user_id) VALUES ($1, $2, $3)`
+	query := `UPDATE cart set unit=$1 WHERE user_id=$2 AND  product_id=$3`
+	fmt.Println(query, request.Unit, request.Userid, request.Productid)
+	_, err := r.sql.ExecContext(ctx, query, request.Unit, request.Userid, request.Productid)
 	if err != nil {
 		return fmt.Errorf("failed to execute insert query: %w", err)
 	}

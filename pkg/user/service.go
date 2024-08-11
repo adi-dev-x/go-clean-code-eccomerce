@@ -2,6 +2,8 @@ package user
 
 import (
 	"context"
+	"math"
+	"net/url"
 	"sync"
 
 	"fmt"
@@ -36,7 +38,7 @@ type Service interface {
 	////cart and wish
 	AddTocart(ctx context.Context, request model.Cart, username string) error
 	AddToWish(ctx context.Context, request model.Wishlist) error
-
+	UpdateToCart(ctx context.Context, request model.Cart, username string) error
 	///
 	AddAddress(ctx context.Context, request model.Address, username string) error
 	AddToorder(ctx context.Context, request model.Order) (model.RZpayment, error)
@@ -44,7 +46,7 @@ type Service interface {
 	ListWish(ctx context.Context, id string) ([]model.UserWishview, error)
 	ListAddress(ctx context.Context, username string) ([]model.Address, error)
 	ActiveListing(ctx context.Context) ([]model.Coupon, error)
-	AddToCheck(ctx context.Context, request model.CheckOut, username string) (model.RZpayment, error)
+	AddToCheck(ctx context.Context, request model.CheckOut, username string) (model.RZpayment, error, url.Values)
 	PaymentSuccess(ctx context.Context, rz model.RZpayment, username string) error
 	PaymentFailed(ctx context.Context, rz model.RZpayment, username string) error
 	//list orders
@@ -268,8 +270,23 @@ func (s *service) AddTocart(ctx context.Context, request model.Cart, username st
 		fmt.Println("this is in the service error value missing")
 		return fmt.Errorf("missing values")
 	}
+	if request.Unit < 0 {
+		return fmt.Errorf("enter valid unit")
+
+	}
 
 	products, err := s.repo.ListingByid(ctx, request.Productid)
+	//check if product already exist
+	check, err := s.repo.ItemExistsInCart(ctx, request.Productid, id)
+	if err != nil {
+		fmt.Println("failed to get product:", err)
+		return fmt.Errorf("failed to check product exist or not: %w", err)
+	}
+	if check {
+		return fmt.Errorf("Product is already added ")
+
+	}
+
 	if err != nil {
 		fmt.Println("failed to get product:", err)
 		return fmt.Errorf("failed to get product: %w", err)
@@ -281,6 +298,12 @@ func (s *service) AddTocart(ctx context.Context, request model.Cart, username st
 	}
 
 	product := products[0]
+	fmt.Println("this is in cart ", product.Unit)
+	if product.Unit == 0 {
+
+		return fmt.Errorf("not enough units available")
+
+	}
 	if product.Unit < float64(request.Unit) {
 		fmt.Println("not enough units available")
 		return fmt.Errorf("not enough units available")
@@ -288,6 +311,52 @@ func (s *service) AddTocart(ctx context.Context, request model.Cart, username st
 	request.Userid = id
 	// Add to cart
 	return s.repo.AddTocart(ctx, request)
+}
+func (s *service) UpdateToCart(ctx context.Context, request model.Cart, username string) error {
+
+	id := s.repo.Getid(ctx, username)
+	if request.Productid == "" {
+		fmt.Println("this is in the service error value missing")
+		return fmt.Errorf("missing values S")
+	}
+	if request.To_delete {
+
+	}
+	products, err := s.repo.ListingByid(ctx, request.Productid)
+
+	if err != nil {
+		fmt.Println("failed to get product:", err)
+		return fmt.Errorf("failed to get product: %w", err)
+	}
+
+	if len(products) == 0 {
+		fmt.Println("product not found")
+		return fmt.Errorf("product not found")
+	}
+	carts, err := s.repo.GetSpecificCart(ctx, id, request.Productid)
+	if err != nil {
+		fmt.Println("failed to get cart:", err)
+		return fmt.Errorf("failed to get cart: %w", err)
+	}
+
+	product := products[0]
+	fmt.Println("this is in cart ", product.Unit)
+	if product.Unit == 0 {
+
+		return fmt.Errorf("not enough units available")
+
+	}
+	if product.Unit < float64(request.Unit)+carts.Unit {
+		fmt.Println("not enough units available")
+		return fmt.Errorf("not enough units available")
+	}
+	if math.Abs(request.Unit) > carts.Unit {
+		return fmt.Errorf("enter valid units")
+	}
+	request.Userid = id
+	request.Unit = float64(carts.Unit) + float64(request.Unit)
+	// Add to cart
+	return s.repo.UpdateToCart(ctx, request)
 }
 func (s *service) AddToWish(ctx context.Context, request model.Wishlist) error {
 	if request.Productid == "" || request.Userid == "" {
@@ -331,7 +400,7 @@ func (s *service) AddToorder(ctx context.Context, request model.Order) (model.RZ
 	//fmt.Println("this is the status ", status)
 	return k, nil
 }
-func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, username string) (model.RZpayment, error) {
+func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, username string) (model.RZpayment, error, url.Values) {
 	id := s.repo.Getid(ctx, username)
 	Paymentstatus := "Pending"
 	fmt.Println("inside the service corrected Addto order ", id)
@@ -358,8 +427,28 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	}()
 
 	cartData := <-cartDataChan
+
 	amount := <-amountChan
 	discount := <-discountChan
+	checker := func(cartData model.CartresponseData) url.Values {
+		err := url.Values{}
+		for _, v := range cartData.Data {
+			fmt.Println("Processing item:", v.P_Name, v.P_Units, v.Unit)
+			if v.P_Units < v.Unit {
+				erS := v.P_Name + " this is product in low in stock"
+				err.Add(v.P_Name, erS)
+			}
+
+		}
+		return err
+
+	}
+	stErr := checker(cartData)
+	fmt.Println("Stock error", stErr)
+	if stErr != nil {
+		return model.RZpayment{}, nil, stErr
+	}
+
 	cid := request.Couponid
 	PayType := request.Type
 	fmt.Println("klkl", PayType)
@@ -370,7 +459,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	fmt.Println("checking exist or notttttt!!!!!!!", k)
 	if k == "" {
 		fmt.Println("ifffff   checking exist in ifffff notttttt!!!!!!!")
-		return model.RZpayment{}, fmt.Errorf("no order exist for the user: %w")
+		return model.RZpayment{}, fmt.Errorf("no order exist for the user: %w"), nil
 
 	}
 	if cid != "" {
@@ -378,7 +467,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		errValues := coupon.Valid()
 		if len(errValues) > 0 {
 			// return fmt.Errorf(map[string]interface{}{"invalid": errValues})
-			return model.RZpayment{}, fmt.Errorf("invalid", errValues)
+			return model.RZpayment{}, fmt.Errorf("invalid", errValues), nil
 		}
 		couponAmt = coupon.Amount
 
@@ -400,7 +489,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	fmt.Println("this is the comparison of coupon amt --- ", Camt, " --max amt - ", maxCAmt)
 	if maxCAmt < int(Camt) {
 
-		return model.RZpayment{}, fmt.Errorf("this is more than the limit of the coupon")
+		return model.RZpayment{}, fmt.Errorf("this is more than the limit of the coupon"), nil
 	}
 	fmt.Println("this is the calculation vart!!", Camt, couponAmt, amount, w_amt, PayType, request.Aid, Paymentstatus)
 	var newAmount float64
@@ -434,7 +523,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	fmt.Println("this is cid in  checkout ", cid)
 	OrderID, uuid, err := s.repo.CreateOrder(ctx, order)
 	if err != nil {
-		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err), nil
 	}
 
 	fmt.Println("Order created with ID:!!!!", OrderID, uuid)
@@ -455,7 +544,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	close(Err)
 
 	if err := <-Err; err != nil {
-		return model.RZpayment{}, fmt.Errorf("failed to send order confirmation email: %w", err)
+		return model.RZpayment{}, fmt.Errorf("failed to send order confirmation email: %w", err), nil
 	}
 	ty := request.Type
 	paySt := model.PaymentInsert{
@@ -467,12 +556,12 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	}
 	PaymentId, err := s.repo.MakePayment(ctx, paySt)
 	if err != nil {
-		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err), nil
 	}
 
 	err = s.repo.AddOrderItems(ctx, cartData, OrderID, id, PaymentId)
 	if err != nil {
-		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+		return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err), nil
 	}
 
 	fmt.Println("this the payment id!!", PaymentId)
@@ -507,12 +596,12 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		}()
 		kl := <-p
 		if kl != 1 {
-			return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+			return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err), nil
 
 		}
 		Lrr := <-j
 		if Lrr != nil {
-			return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err)
+			return model.RZpayment{}, fmt.Errorf("failed to create order: %w", err), nil
 		}
 
 	} else {
@@ -527,12 +616,13 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		rz.Oid = OrderID
 		rz.Cid = cid
 
-		return rz, nil
+		return rz, nil, nil
 
 	}
 
-	return model.RZpayment{}, nil
+	return model.RZpayment{}, nil, nil
 }
+
 func (s *service) PaymentFailed(ctx context.Context, rz model.RZpayment, username string) error {
 	fmt.Println("inside PaymentFailed")
 	//id := s.repo.Getid(ctx, username)

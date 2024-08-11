@@ -6,9 +6,10 @@ import (
 )
 
 type Cart struct {
-	Productid string `json:"product_id"`
-	Unit      int    `json:"unit"`
-	Userid    string `json:"user_id"`
+	Productid string  `json:"product_id"`
+	Unit      float64 `json:"unit"`
+	Userid    string  `json:"user_id"`
+	To_delete bool    `json:"to_delete"`
 }
 type Usercartview struct {
 	Productcategory string `json:"category"`
@@ -59,6 +60,8 @@ type Cartresponse struct {
 	Amount   int    `json:"amount"`
 	Unit     int    `json:"unit"`
 	Discount int    `json:"discount"`
+	P_Units  int    `json:"p_units"`
+	P_Name   string `json:"p_name"`
 }
 type CartresponseData struct {
 	Data []Cartresponse

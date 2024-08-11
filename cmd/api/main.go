@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"log"
 	"myproject/pkg/config"
@@ -11,9 +12,14 @@ import (
 
 func main() {
 	// Load configuration
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Current working directory:", cwd)
 	conf, err := config.LoadConfig()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	errs := db.InitRedis()
 	if errs != nil {

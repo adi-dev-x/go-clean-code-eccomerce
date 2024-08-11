@@ -65,7 +65,8 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/InAZListing", h.InAZListing)
 		applicantApi.GET("/InZAListing", h.InZAListing)
 		applicantApi.POST("/AddTocart", h.AddToCart)
-		//applicantApi.POST("/AddTocart", h.AddToCart)
+		applicantApi.POST("/UpdateTocart", h.UpdateToCart)
+
 		applicantApi.POST("/AddToWish", h.AddToWish)
 		applicantApi.GET("/Listcart/", h.Listcart)
 		applicantApi.GET("/ListWish/:id", h.ListWish)
@@ -86,7 +87,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		//// wallet transactions
 		applicantApi.GET("/listAllTransactions", h.ListAllTransactions)
 		applicantApi.GET("/listCreditTransactions", h.ListCreditTransactions)
-		applicantApi.GET("/listDetibTransactions", h.ListDetibTransactions)
+		applicantApi.GET("/listDebitTransactions", h.ListDebitTransactions)
 
 	}
 
@@ -135,6 +136,20 @@ func (h *Handler) ListCreditTransactions(c echo.Context) error {
 	username := c.Get("username").(string)
 	ctx := c.Request().Context()
 	ty := "Credit"
+	products, err := h.service.ListTypeTransactions(ctx, username, ty)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) ListDebitTransactions(c echo.Context) error {
+	fmt.Println("in activeeee")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	ty := "Debit"
 	products, err := h.service.ListTypeTransactions(ctx, username, ty)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
@@ -473,6 +488,27 @@ func (h *Handler) AddToCart(c echo.Context) error {
 
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
+func (h *Handler) UpdateToCart(c echo.Context) error {
+	fmt.Println("this is in the handler AddToCart")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	fmt.Println("inside the cart list ", username)
+
+	var request model.Cart
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+
+	ctx := c.Request().Context()
+	if err := h.service.UpdateToCart(ctx, request, username); err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	fmt.Println("Item added to cart successfully")
+
+	return h.respondWithData(c, http.StatusOK, "success", nil)
+}
 func (h *Handler) AddToWish(c echo.Context) error {
 	fmt.Println("this is in the handler AddToWish")
 
@@ -593,7 +629,10 @@ func (h *Handler) AddToCheck(c echo.Context) error {
 	}
 	///////this start
 
-	rz, err := h.service.AddToCheck(ctx, request, username)
+	rz, err, ler := h.service.AddToCheck(ctx, request, username)
+	if len(ler) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": ler})
+	}
 	if rz.Amt != 0 {
 		authHeader := c.Request().Header.Get("Authorization")
 		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
