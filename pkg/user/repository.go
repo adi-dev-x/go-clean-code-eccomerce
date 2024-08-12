@@ -56,12 +56,14 @@ type Repository interface {
 	MakePayment(ctx context.Context, paySt model.PaymentInsert) (string, error)
 	UpdateStock(ctx context.Context, value interface{}) error
 
+	///cart
 	DeleteCart(ctx context.Context, id string) error
 	GetCartExist(ctx context.Context, id string) (string, error)
 	UpdateUsestatusCoupon(ctx context.Context, id string) error
 	UpdateOrderStatus(ctx context.Context, id string, status string) error
 	UpdatePaymentStatus(ctx context.Context, id string, status string) error
 	ItemExistsInCart(ctx context.Context, id string, status string) (bool, error)
+	DeleteSingleCart(ctx context.Context, id string, pid string) error
 	///orderss
 	ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error)
 	ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
@@ -410,6 +412,25 @@ func (r *repository) UpdateUsestatusCoupon(ctx context.Context, id string) error
 func (r *repository) DeleteCart(ctx context.Context, id string) error {
 	query := ` delete from cart where user_id=$1`
 	result, err := r.sql.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete from cart: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no cart found with id: %s", id)
+	}
+
+	return nil
+}
+func (r *repository) DeleteSingleCart(ctx context.Context, id string, pid string) error {
+	fmt.Println("this is in the rep DeleteSingleCart", id, pid)
+	query := ` delete from cart where user_id=$1 AND product_id=$2`
+	result, err := r.sql.ExecContext(ctx, query, id, pid)
 	if err != nil {
 		return fmt.Errorf("failed to delete from cart: %w", err)
 	}

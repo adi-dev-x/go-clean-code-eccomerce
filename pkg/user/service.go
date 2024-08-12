@@ -320,6 +320,13 @@ func (s *service) UpdateToCart(ctx context.Context, request model.Cart, username
 		return fmt.Errorf("missing values S")
 	}
 	if request.To_delete {
+		fmt.Println("this is the product id", request.Productid)
+		err := s.repo.DeleteSingleCart(ctx, id, request.Productid)
+		if err != nil {
+			return fmt.Errorf("error in deleting cart try again")
+		} else {
+			return nil
+		}
 
 	}
 	products, err := s.repo.ListingByid(ctx, request.Productid)
@@ -350,8 +357,10 @@ func (s *service) UpdateToCart(ctx context.Context, request model.Cart, username
 		fmt.Println("not enough units available")
 		return fmt.Errorf("not enough units available")
 	}
-	if math.Abs(request.Unit) > carts.Unit {
-		return fmt.Errorf("enter valid units")
+	if request.Unit < 0 {
+		if math.Abs(request.Unit) > carts.Unit {
+			return fmt.Errorf("enter valid units")
+		}
 	}
 	request.Userid = id
 	request.Unit = float64(carts.Unit) + float64(request.Unit)
@@ -445,7 +454,8 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 	}
 	stErr := checker(cartData)
 	fmt.Println("Stock error", stErr)
-	if stErr != nil {
+	if len(stErr) > 0 {
+		fmt.Println("in this errr")
 		return model.RZpayment{}, nil, stErr
 	}
 

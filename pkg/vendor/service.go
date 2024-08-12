@@ -67,30 +67,30 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	}
 	var w sync.WaitGroup
 
-	Err := make(chan error, 1)
-	Err2 := make(chan error, 1)
-	Err3 := make(chan error, 1)
-	Err4 := make(chan error, 1)
+	VErr := make(chan error, 1)
+	VErr2 := make(chan error, 1)
+	VErr3 := make(chan error, 1)
+	VErr4 := make(chan error, 1)
 	w.Add(4)
 	go func() {
 		defer w.Done()
 		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
-		Err <- err
+		VErr <- err
 	}()
 	go func() {
 		defer w.Done()
 		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
-		Err <- err
+		VErr <- err
 	}()
 	go func() {
 		defer w.Done()
 		err := s.repo.IncreaseStock(ctx, p.Pid, p.Unit)
-		Err2 <- err
+		VErr2 <- err
 	}()
 	go func() {
 		defer w.Done()
 		err := s.repo.UpdateOiStatus(ctx, request.Oid)
-		Err3 <- err
+		VErr3 <- err
 	}()
 	go func() {
 		defer w.Done()
@@ -114,26 +114,26 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 			wallet_id = ""
 			err = nil
 		}
-		Err4 <- err
+		VErr4 <- err
 
 	}()
 	go func() {
 		w.Wait()
-		close(Err)
-		close(Err2)
-		close(Err3)
-		close(Err4)
+		close(VErr)
+		close(VErr2)
+		close(VErr3)
+		close(VErr4)
 	}()
-	if err := <-Err; err != nil {
+	if err := <-VErr; err != nil {
 		return fmt.Errorf("failed to send order  return  email: %w", err)
 	}
-	if err := <-Err2; err != nil {
+	if err := <-VErr2; err != nil {
 		return fmt.Errorf("failed to update unit: %w", err)
 	}
-	if err := <-Err3; err != nil {
+	if err := <-VErr3; err != nil {
 		return fmt.Errorf("failed to update to redund status: %w", err)
 	}
-	if err := <-Err4; err != nil {
+	if err := <-VErr4; err != nil {
 		return fmt.Errorf("failed to update to redund status: %w", err)
 	}
 
