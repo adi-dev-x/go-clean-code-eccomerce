@@ -62,6 +62,7 @@ type ListOrdersVendor struct {
 	Date     string  `json:"date"`
 	User     string  `json:"user"`
 	Add      string  `json:"user_ad"`
+	ListDate string  `json:"check"`
 }
 type SalesReport struct {
 	Type string `json:"type"`
@@ -69,11 +70,18 @@ type SalesReport struct {
 	From string `json:"from"`
 	To   string `json:"to"`
 }
+type Salesfact struct {
+	Revenue       float64 `json:"revenue"`
+	TotalDiscount float64 `json:"total_discount"`
+	TotalSales    float64 `json:"total_sales"`
+	TotalOrders   int     `json:"total_orders"`
+	Date          string
+}
 
 func (s *SalesReport) Valid() (err url.Values) {
 	err = url.Values{}
-	if !(s.Type == "Weekly" || s.Type == "Daily" || s.Type == "Yearly" || s.Type == "Custom") {
-		err.Add("Wrong format of Type", " Type should be in Weekly Daily Yearly Custom")
+	if !(s.Type == "Weekly" || s.Type == "Daily" || s.Type == "Yearly" || s.Type == "Monthly" || s.Type == "Custom") {
+		err.Add("Wrong format of Type", " Type should be in Weekly Daily Yearly Monthly Custom")
 	}
 	if s.Type == "Custom" {
 		const dateFormat = "2006-01-02"

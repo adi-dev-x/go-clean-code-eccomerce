@@ -8,6 +8,7 @@ import (
 	"myproject/pkg/model"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -34,7 +35,7 @@ type Service interface {
 	ListFailedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 	ListCompletedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 	ListPendingOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
-
+	SalesReport(ctx context.Context, id string, request model.SalesReport) ([]model.ListOrdersVendor, error)
 	//returning
 	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
 }
@@ -120,6 +121,11 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 
 	if p.Status == "Failed" {
 		return fmt.Errorf("this item is payment failed")
+
+	}
+
+	if p.Status == "Cancelled" {
+		return fmt.Errorf("this order is Cancelled")
 
 	}
 	var w sync.WaitGroup
@@ -247,6 +253,103 @@ func (s *service) ListCompletedOrders(ctx context.Context, username string) ([]m
 	}
 
 	return orders, nil
+}
+func (s *service) SalesReport(ctx context.Context, username string, request model.SalesReport) ([]model.ListOrdersVendor, error) {
+	id := s.repo.Getid(ctx, username)
+
+	// Parse dates
+	const dateFormat = "2006-01-02"
+	var startDate, endDate time.Time
+	var err error
+	var orders []model.ListOrdersVendor
+	if request.Type == "Custom" {
+		startDate, err = time.Parse(dateFormat, request.From)
+		if err != nil {
+			return nil, fmt.Errorf("invalid From date format: %w", err)
+		}
+		endDate, err = time.Parse(dateFormat, request.To)
+		if err != nil {
+			return nil, fmt.Errorf("invalid To date format: %w", err)
+		}
+		orders, err = s.repo.SalesReportOrdersCustom(ctx, startDate, endDate, id)
+		fmt.Println("in data!!", orders)
+		if err != nil {
+			return nil, fmt.Errorf("error in receiving data")
+		}
+	}
+	if request.Type == "Yearly" {
+		orders, err = s.repo.SalesReportOrdersYearly(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("error in receiving yearly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Monthly" {
+		orders, err = s.repo.SalesReportOrdersMonthly(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("error in receiving monthly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Weekly" {
+		orders, err = s.repo.SalesReportOrdersWeekly(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("error in receiving weekly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Daily" {
+		orders, err = s.repo.SalesReportOrdersDaily(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("error in receiving daily data: %w", err)
+		}
+
+	}
+	fmt.Println("this is the dattaaaa!!!!!", orders)
+	// Call repository function
+	salesFacts, err := s.repo.GetSalesFactByDate(ctx, request.Type, startDate, endDate, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sales facts: %w", err)
+	}
+	fmt.Println(salesFacts)
+
+	// ReportChan := make(chan model.Salesfact)
+	// OrdersChan := make(chan []model.ListOrdersVendor)
+	// var wg sync.WaitGroup
+	// wg.Add(2)
+	// go func() {
+
+	// }()
+	// go func() {
+	// 	Stype := request.Type
+	// 	switch Stype {
+	// 	case "Daily":{
+	// 		orders,err:=s.repo.ListCompletedOrders(ctx,id)
+	// 		if err!=nil{
+	// 			OrdersChan <-nil
+	// 		}else{
+	// 			OrdersChan <-orders
+	// 		}
+	// 	}
+	// 	case "Monthly":
+	// 	}
+
+	// }()
+	// go func() {
+	// 	wg.Wait()
+	// 	close(ReportChan)
+	// 	close(OrdersChan)
+	// }()
+
+	// orders, err := s.repo.ListCompletedOrders(ctx, id)
+	// if err != nil {
+	// 	return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	// }
+
+	return nil, nil
 }
 func (s *service) ListPendingOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error) {
 	id := s.repo.Getid(ctx, username)

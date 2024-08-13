@@ -56,7 +56,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listFailedOrders", h.ListFailedOrders)
 		applicantApi.GET("/listCompletedOrders", h.ListCompletedOrders)
 		applicantApi.GET("/listPendingOrders", h.ListPendingOrders)
-		applicantApi.POST("/returnItem", h.ReturnItem)
+		applicantApi.POST("/cancelItem", h.CancelItem)
 
 	}
 }
@@ -103,7 +103,7 @@ func (h *Handler) UpdateProduct(c echo.Context) error {
 }
 
 // / orders///
-func (h *Handler) ReturnItem(c echo.Context) error {
+func (h *Handler) CancelItem(c echo.Context) error {
 	fmt.Println("this is in the handler ReturnItem")
 	authHeader := c.Request().Header.Get("Authorization")
 	fmt.Println("inside the cart list ", authHeader)
@@ -170,11 +170,11 @@ func (h *Handler) SalesReport(c echo.Context) error {
 	ctx := c.Request().Context()
 	fmt.Println(ctx, username)
 
-	//orders, err := h.service.ListCompletedOrders(ctx, username)
-	// if err != nil {
-	// 	return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
-	// }
-	// fmt.Println("this is the data ", orders)
+	orders, err := h.service.SalesReport(ctx, username, request)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
 
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 }

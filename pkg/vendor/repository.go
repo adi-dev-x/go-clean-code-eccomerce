@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"myproject/pkg/model"
 )
@@ -32,6 +33,13 @@ type Repository interface {
 	ListCompletedOrders(ctx context.Context, id string) ([]model.ListOrdersVendor, error)
 	ListPendingOrders(ctx context.Context, id string) ([]model.ListOrdersVendor, error)
 
+	GetSalesFactByDate(ctx context.Context, filterType string, startDate, endDate time.Time, vendorID string) ([]model.Salesfact, error)
+	SalesReportOrdersWeekly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error)
+	SalesReportOrdersDaily(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error)
+
+	SalesReportOrdersMonthly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error)
+	SalesReportOrdersYearly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error)
+	SalesReportOrdersCustom(ctx context.Context, startDate, endDate time.Time, vendorID string) ([]model.ListOrdersVendor, error)
 	//return
 	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error)
 
@@ -323,6 +331,262 @@ func (r *repository) ListCompletedOrders(ctx context.Context, id string) ([]mode
 
 	return orders, nil
 }
+func (r *repository) SalesReportOrdersCustom(ctx context.Context, startDate, endDate time.Time, vendorID string) ([]model.ListOrdersVendor, error) {
+
+	query := `SELECT 
+    p.name, oi.quantity, mo.status, oi.returned, oi.price, oi.product_id AS pid, 
+    DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
+    COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
+    COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad 
+    FROM order_items oi 
+    JOIN product_models p ON oi.product_id = p.id 
+    JOIN vendor v ON p.vendor_id = v.id 
+    JOIN orders mo ON oi.order_id = mo.id 
+    JOIN users u ON mo.user_id = u.id 
+    JOIN address a ON mo.address_id = a.address_id 
+    WHERE v.id = $1 AND  mo.status='Completed' AND DATE(oi.created_at) BETWEEN $2 AND $3 ;`
+
+	var orders []model.ListOrdersVendor
+
+	rows, err := r.sql.QueryContext(ctx, query, vendorID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query in ListOrdersVendor: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListOrdersVendor
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return orders, nil
+}
+func (r *repository) SalesReportOrdersYearly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error) {
+
+	query := `SELECT EXTRACT(YEAR FROM oi.created_at) AS checks, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
+	oi.quantity AS total_price, 
+	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
+	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
+	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY checks;
+`
+
+	var orders []model.ListOrdersVendor
+
+	rows, err := r.sql.QueryContext(ctx, query, vendorID)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query in ListOrdersVendor: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListOrdersVendor
+		err := rows.Scan(&order.ListDate, &order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.User, &order.Add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return orders, nil
+}
+func (r *repository) SalesReportOrdersMonthly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error) {
+
+	query := `SELECT EXTRACT(MONTH FROM oi.created_at) AS check, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
+	oi.quantity AS total_price, 
+	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
+	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
+	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY check;
+`
+
+	var orders []model.ListOrdersVendor
+
+	rows, err := r.sql.QueryContext(ctx, query, vendorID)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query in ListOrdersVendor: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListOrdersVendor
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return orders, nil
+}
+func (r *repository) SalesReportOrdersWeekly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error) {
+
+	query := `SELECT EXTRACT(WEEK FROM oi.created_at) AS check, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
+	oi.quantity AS total_price, 
+	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
+	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
+	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY check;
+`
+
+	var orders []model.ListOrdersVendor
+
+	rows, err := r.sql.QueryContext(ctx, query, vendorID)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query in ListOrdersVendor: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListOrdersVendor
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return orders, nil
+}
+func (r *repository) SalesReportOrdersDaily(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error) {
+
+	query := `SELECT EXTRACT(DAY FROM oi.created_at) AS check, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
+	oi.quantity AS total_price, 
+	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
+	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
+	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY check;
+`
+
+	var orders []model.ListOrdersVendor
+
+	rows, err := r.sql.QueryContext(ctx, query, vendorID)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query in ListOrdersVendor: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListOrdersVendor
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return orders, nil
+}
+func (r *repository) GetSalesFactByDate(ctx context.Context, filterType string, startDate, endDate time.Time, vendorID string) ([]model.Salesfact, error) {
+	var query string
+	var args []interface{}
+	// const dateFormat = "2006-01-02"
+	fmt.Println("this is the filter ", filterType)
+
+	switch filterType {
+	case "Yearly":
+		query = `
+			SELECT EXTRACT(YEAR FROM oi.created_at) AS year, 
+			       SUM(oi.price * oi.quantity) AS revenue,
+			       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
+			       SUM(oi.discount * oi.quantity) AS total_discount,
+			       COUNT(*) AS total_orders
+			FROM order_items oi
+			JOIN product_models pm ON oi.product_id = pm.id
+			WHERE pm.vendor_id = $1
+			GROUP BY year`
+		args = append(args, vendorID)
+	case "Monthly":
+		query = `
+			SELECT EXTRACT(MONTH FROM oi.created_at) AS month, 
+			       SUM(oi.price * oi.quantity) AS revenue,
+			       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
+			       SUM(oi.discount * oi.quantity) AS total_discount,
+			       COUNT(*) AS total_orders
+			FROM order_items oi
+			JOIN product_models pm ON oi.product_id = pm.id
+			WHERE EXTRACT(YEAR FROM oi.created_at) = $1 AND pm.vendor_id = $2
+			GROUP BY month`
+		args = append(args, startDate.Year(), vendorID)
+	case "Daily":
+		query = `
+			SELECT EXTRACT(DAY FROM oi.created_at) AS day, 
+			       SUM(oi.price * oi.quantity) AS revenue,
+			       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
+			       SUM(oi.discount * oi.quantity) AS total_discount,
+			       COUNT(*) AS total_orders
+			FROM order_items oi
+			JOIN product_models pm ON oi.product_id = pm.id
+			WHERE EXTRACT(YEAR FROM oi.created_at) = $1 
+			      AND EXTRACT(MONTH FROM oi.created_at) = $2 
+			      AND pm.vendor_id = $3
+			GROUP BY day`
+		args = append(args, startDate.Year(), int(startDate.Month()), vendorID)
+	case "Custom":
+		fmt.Println("inside the custom switch")
+		query = `
+			SELECT DATE(oi.created_at) AS date, 
+			       SUM(oi.price * oi.quantity) AS revenue,
+			       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
+			       SUM(oi.discount * oi.quantity) AS total_discount,
+			       COUNT(*) AS total_orders
+			FROM order_items oi
+			JOIN product_models pm ON oi.product_id = pm.id
+			WHERE DATE(oi.created_at) BETWEEN $1 AND $2 
+			      AND pm.vendor_id = $3
+			GROUP BY date`
+		args = append(args, startDate, endDate, vendorID)
+	default:
+		return nil, fmt.Errorf("invalid filter type")
+	}
+
+	rows, err := r.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	var salesFacts []model.Salesfact
+	for rows.Next() {
+		var salesFact model.Salesfact
+		err := rows.Scan(&salesFact.Date, &salesFact.Revenue, &salesFact.TotalSales, &salesFact.TotalDiscount, &salesFact.TotalOrders)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		salesFacts = append(salesFacts, salesFact)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return salesFacts, nil
+}
+
 func (r *repository) ListPendingOrders(ctx context.Context, id string) ([]model.ListOrdersVendor, error) {
 	query := `SELECT 
     p.name, oi.quantity, mo.status, oi.returned, oi.price, oi.product_id AS pid, 
