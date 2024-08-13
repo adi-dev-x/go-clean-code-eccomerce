@@ -40,14 +40,17 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 	applicantApi.POST("/OtpLogin", h.OtpLogin)
 	applicantApi.Use(h.adminjw.VendorAuthMiddleware())
 	{
+		applicantApi.POST("/UpdateProduct", h.UpdateProduct)
 		applicantApi.POST("/AddProduct", h.AddProduct)
 		applicantApi.GET("/listing/", h.Listing)
+		applicantApi.POST("/Categorylisting", h.CategoryListing)
 		applicantApi.GET("/Latestlisting/", h.LatestListing)
 		applicantApi.GET("/PhighListing/", h.PhighListing)
 		applicantApi.GET("/PlowListing/", h.PlowListing)
 		applicantApi.GET("/InAZListing/", h.InAZListing)
 		applicantApi.GET("/InZAListing/", h.InZAListing)
 		/// list orders
+		applicantApi.POST("/SalesReport", h.SalesReport)
 		applicantApi.GET("/listAllOrders", h.ListAllOrders)
 		applicantApi.GET("/listReturnedOrders", h.ListReturnedOrders)
 		applicantApi.GET("/listFailedOrders", h.ListFailedOrders)
@@ -72,6 +75,31 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 		"data": data,
 	}
 	return c.JSON(code, resp)
+}
+func (h *Handler) UpdateProduct(c echo.Context) error {
+
+	fmt.Println("this is in the handler UpdateProduct")
+	var request model.UpdateProduct
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	ErrVal := request.Valid()
+	if len(ErrVal) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": ErrVal})
+	}
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	// Validate request fields
+	//errVal := request.Valid()
+
+	ctx := c.Request().Context()
+	if err := h.service.UpdateProduct(ctx, request, username); err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	fmt.Println("this is in the handler UpdateProduct")
+
+	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
 
 // / orders///
@@ -124,6 +152,31 @@ func (h *Handler) ListCompletedOrders(c echo.Context) error {
 	fmt.Println("this is the data ", orders)
 
 	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) SalesReport(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	var request model.SalesReport
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	ErrVal := request.Valid()
+	if len(ErrVal) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": ErrVal})
+	}
+
+	ctx := c.Request().Context()
+	fmt.Println(ctx, username)
+
+	//orders, err := h.service.ListCompletedOrders(ctx, username)
+	// if err != nil {
+	// 	return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	// }
+	// fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
 func (h *Handler) ListFailedOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
@@ -294,6 +347,29 @@ func (h *Handler) Listing(c echo.Context) error {
 	fmt.Println("this is the id from the paramsssss !!! ", id)
 
 	products, err := h.service.Listing(ctx, id)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) CategoryListing(c echo.Context) error {
+	ctx := c.Request().Context()
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	id := c.Get("username").(string)
+	type Cat struct {
+		Category string `json:"category"`
+	}
+	var request Cat
+
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	if request.Category == "" {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Enter a valid value"})
+	}
+	products, err := h.service.CategoryListing(ctx, request.Category, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
 	}

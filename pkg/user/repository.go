@@ -33,12 +33,14 @@ type Repository interface {
 	///
 
 	///product listing
-	Listing(ctx context.Context) ([]model.ProductListUsers, error)
-	LatestListing(ctx context.Context) ([]model.ProductList, error)
-	PhighListing(ctx context.Context) ([]model.ProductList, error)
-	PlowListing(ctx context.Context) ([]model.ProductList, error)
-	InAZListing(ctx context.Context) ([]model.ProductList, error)
-	InZAListing(ctx context.Context) ([]model.ProductList, error)
+	Listing(ctx context.Context) ([]model.ProductListingUsers, error)
+	CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error)
+	LatestListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	PhighListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	PlowListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	InAZListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	InZAListing(ctx context.Context) ([]model.ProductListingUsers, error)
 	ListingByid(ctx context.Context, id string) ([]model.ProductList, error)
 	GetProductIDFromCart(ctx context.Context, cartId string) (string, error)
 	///
@@ -1076,7 +1078,7 @@ func (r *repository) ListWish(ctx context.Context, id string) ([]model.UserWishv
 	return products, nil
 }
 
-func (r *repository) Listing(ctx context.Context) ([]model.ProductListUsers, error) {
+func (r *repository) Listing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	query := `
 		SELECT 
 			product_models.name,
@@ -1086,7 +1088,7 @@ func (r *repository) Listing(ctx context.Context) ([]model.ProductListUsers, err
 			product_models.amount,
 			product_models.status,
 			product_models.discount,
-			vendor.name AS vendorName,
+			
 			 product_models.id AS pid 
 		FROM 
 			product_models 
@@ -1099,10 +1101,95 @@ func (r *repository) Listing(ctx context.Context) ([]model.ProductListUsers, err
 	}
 	defer rows.Close()
 
-	var products []model.ProductListUsers
+	var products []model.ProductListingUsers
 	for rows.Next() {
-		var product model.ProductListUsers
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName, &product.Pid)
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+func (r *repository) CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	query := `
+		SELECT 
+			product_models.name,
+			product_models.category,
+			product_models.units,
+			product_models.tax,
+			product_models.amount,
+			product_models.status,
+			product_models.discount,
+			
+			 product_models.id AS pid 
+		FROM 
+			product_models 
+		INNER JOIN 
+			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND product_models.category ILIKE '%' || $1 || '%';`
+
+	rows, err := r.sql.QueryContext(ctx, query, category)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductListingUsers
+	for rows.Next() {
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+func (r *repository) ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error) {
+	query := `
+		SELECT 
+			product_models.name,
+			product_models.category,
+			product_models.units,
+			product_models.tax,
+			product_models.amount,
+			product_models.status,
+			product_models.discount,
+			vendor.name AS vendorName,
+            product_models.id AS pid, 
+			vendor.email AS vendorEmail,
+			vendor.gst AS vendorgst,
+			
+			vendor.id AS vendorid,
+			product_models.description AS pds
+		FROM 
+			product_models 
+		INNER JOIN 
+			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND product_models.id=$1;`
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductListDetailed
+	for rows.Next() {
+		var product model.ProductListDetailed
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName, &product.Pid, &product.VEmail, &product.VGst, &product.VId, &product.Pds)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -1162,7 +1249,7 @@ func (r *repository) ListingByid(ctx context.Context, id string) ([]model.Produc
 
 	return products, nil
 }
-func (r *repository) LatestListing(ctx context.Context) ([]model.ProductList, error) {
+func (r *repository) LatestListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	query := `
 		SELECT 
 			product_models.name,
@@ -1172,7 +1259,8 @@ func (r *repository) LatestListing(ctx context.Context) ([]model.ProductList, er
 			product_models.amount,
 			product_models.status,
 			product_models.discount,
-			vendor.name AS vendorName  
+			
+			 product_models.id AS pid 
 		FROM 
 			product_models 
 		INNER JOIN 
@@ -1184,13 +1272,14 @@ func (r *repository) LatestListing(ctx context.Context) ([]model.ProductList, er
 	}
 	defer rows.Close()
 
-	var products []model.ProductList
+	var products []model.ProductListingUsers
 	for rows.Next() {
-		var product model.ProductList
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName)
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1200,7 +1289,7 @@ func (r *repository) LatestListing(ctx context.Context) ([]model.ProductList, er
 
 	return products, nil
 }
-func (r *repository) PhighListing(ctx context.Context) ([]model.ProductList, error) {
+func (r *repository) PhighListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	query := `
 		SELECT 
 			product_models.name,
@@ -1210,7 +1299,8 @@ func (r *repository) PhighListing(ctx context.Context) ([]model.ProductList, err
 			product_models.amount,
 			product_models.status,
 			product_models.discount,
-			vendor.name AS vendorName  
+			
+			 product_models.id AS pid 
 		FROM 
 			product_models 
 		INNER JOIN 
@@ -1222,13 +1312,14 @@ func (r *repository) PhighListing(ctx context.Context) ([]model.ProductList, err
 	}
 	defer rows.Close()
 
-	var products []model.ProductList
+	var products []model.ProductListingUsers
 	for rows.Next() {
-		var product model.ProductList
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName)
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1238,7 +1329,7 @@ func (r *repository) PhighListing(ctx context.Context) ([]model.ProductList, err
 
 	return products, nil
 }
-func (r *repository) PlowListing(ctx context.Context) ([]model.ProductList, error) {
+func (r *repository) PlowListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	query := `
 		SELECT 
 			product_models.name,
@@ -1248,7 +1339,8 @@ func (r *repository) PlowListing(ctx context.Context) ([]model.ProductList, erro
 			product_models.amount,
 			product_models.status,
 			product_models.discount,
-			vendor.name AS vendorName  
+			
+			 product_models.id AS pid 
 		FROM 
 			product_models 
 		INNER JOIN 
@@ -1260,13 +1352,14 @@ func (r *repository) PlowListing(ctx context.Context) ([]model.ProductList, erro
 	}
 	defer rows.Close()
 
-	var products []model.ProductList
+	var products []model.ProductListingUsers
 	for rows.Next() {
-		var product model.ProductList
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName)
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1276,7 +1369,7 @@ func (r *repository) PlowListing(ctx context.Context) ([]model.ProductList, erro
 
 	return products, nil
 }
-func (r *repository) InAZListing(ctx context.Context) ([]model.ProductList, error) {
+func (r *repository) InAZListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	query := `
 		SELECT 
 			product_models.name,
@@ -1286,7 +1379,8 @@ func (r *repository) InAZListing(ctx context.Context) ([]model.ProductList, erro
 			product_models.amount,
 			product_models.status,
 			product_models.discount,
-			vendor.name AS vendorName  
+			
+			 product_models.id AS pid 
 		FROM 
 			product_models 
 		INNER JOIN 
@@ -1298,13 +1392,14 @@ func (r *repository) InAZListing(ctx context.Context) ([]model.ProductList, erro
 	}
 	defer rows.Close()
 
-	var products []model.ProductList
+	var products []model.ProductListingUsers
 	for rows.Next() {
-		var product model.ProductList
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName)
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1314,7 +1409,7 @@ func (r *repository) InAZListing(ctx context.Context) ([]model.ProductList, erro
 
 	return products, nil
 }
-func (r *repository) InZAListing(ctx context.Context) ([]model.ProductList, error) {
+func (r *repository) InZAListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	query := `
 		SELECT 
 			product_models.name,
@@ -1324,7 +1419,8 @@ func (r *repository) InZAListing(ctx context.Context) ([]model.ProductList, erro
 			product_models.amount,
 			product_models.status,
 			product_models.discount,
-			vendor.name AS vendorName  
+			
+			 product_models.id AS pid 
 		FROM 
 			product_models 
 		INNER JOIN 
@@ -1336,13 +1432,14 @@ func (r *repository) InZAListing(ctx context.Context) ([]model.ProductList, erro
 	}
 	defer rows.Close()
 
-	var products []model.ProductList
+	var products []model.ProductListingUsers
 	for rows.Next() {
-		var product model.ProductList
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName)
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 

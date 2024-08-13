@@ -57,9 +57,12 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 	engine.Renderer = renderer
 	applicantApi.Use(h.adminjw.AdminAuthMiddleware())
 	{
+
 		applicantApi.POST("/UpdateUser", h.UpdateUser)
+		applicantApi.GET("/listingSingleProduct/:id", h.ListingSingle)
 		applicantApi.GET("/listing", h.Listing)
 		applicantApi.GET("/Latestlisting", h.LatestListing)
+		applicantApi.POST("/Categorylisting", h.CategoryListing)
 		applicantApi.GET("/PhighListing", h.PhighListing)
 		applicantApi.GET("/PlowListing", h.PlowListing)
 		applicantApi.GET("/InAZListing", h.InAZListing)
@@ -69,7 +72,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 
 		applicantApi.POST("/AddToWish", h.AddToWish)
 		applicantApi.GET("/Listcart/", h.Listcart)
-		applicantApi.GET("/ListWish/:id", h.ListWish)
+		applicantApi.GET("/ListWish", h.ListWish)
 		applicantApi.POST("/AddToorder", h.AddToorder)
 		applicantApi.POST("/AddAddress", h.AddAddress)
 		applicantApi.GET("/ListAddress", h.ListAddress)
@@ -302,6 +305,35 @@ func (h *Handler) Listing(c echo.Context) error {
 	fmt.Println("this is the data ", products)
 	return h.respondWithData(c, http.StatusOK, "success", products)
 }
+func (h *Handler) CategoryListing(c echo.Context) error {
+	ctx := c.Request().Context()
+	type Cat struct {
+		Category string `json:"category"`
+	}
+	var request Cat
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	if request.Category == "" {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Enter a valid value"})
+	}
+	products, err := h.service.CategoryListing(ctx, request.Category)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) ListingSingle(c echo.Context) error {
+	ctx := c.Request().Context()
+	id := c.Param("id")
+	products, err := h.service.ListingSingle(ctx, id)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
 func (h *Handler) ListAddress(c echo.Context) error {
 	fmt.Println("this is in the ListAddress")
 	authHeader := c.Request().Header.Get("Authorization")
@@ -516,6 +548,9 @@ func (h *Handler) AddToWish(c echo.Context) error {
 	if err := c.Bind(&request); err != nil {
 		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
 	}
+	username := c.Get("username").(string)
+	fmt.Println("inside the cart list ", username)
+	request.Userid = username
 
 	ctx := c.Request().Context()
 	if err := h.service.AddToWish(ctx, request); err != nil {

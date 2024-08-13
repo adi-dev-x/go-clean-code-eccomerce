@@ -5,14 +5,18 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"myproject/pkg/model"
 )
 
 type Repository interface {
 	Register(ctx context.Context, request model.VendorRegisterRequest) error
-	Listing(ctx context.Context, id string) ([]model.ProductList, error)
+
 	Login(ctx context.Context, email string) (model.VendorRegisterRequest, error)
+	///product
+	Listing(ctx context.Context, id string) ([]model.ProductList, error)
+	CategoryListing(ctx context.Context, category string, id string) ([]model.ProductList, error)
 	AddProduct(ctx context.Context, request model.Product) error
 	LatestListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PhighListing(ctx context.Context, id string) ([]model.ProductList, error)
@@ -20,7 +24,7 @@ type Repository interface {
 	InAZListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InZAListing(ctx context.Context, id string) ([]model.ProductList, error)
 	Getid(ctx context.Context, username string) string
-
+	UpdateProduct(ctx context.Context, query string, args []interface{}) error
 	//orders
 	ListAllOrders(ctx context.Context, id string) ([]model.ListOrdersVendor, error)
 	ListReturnedOrders(ctx context.Context, id string) ([]model.ListOrdersVendor, error)
@@ -47,6 +51,20 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) UpdateProduct(ctx context.Context, query string, args []interface{}) error {
+	queryWithParams := query
+	for _, arg := range args {
+		queryWithParams = strings.Replace(queryWithParams, "?", fmt.Sprintf("'%v'", arg), 1)
+	}
+	fmt.Println("Executing update with query:", queryWithParams)
+	fmt.Println("Arguments:", args)
+	fmt.Println("Executing update for email:", args[len(args)-1]) // Email is the last argument
+	_, err := r.sql.ExecContext(ctx, queryWithParams)
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+	return nil
 }
 func (r *repository) UpdateWalletTransaction(ctx context.Context, value interface{}) error {
 	values, ok := value.([]interface{})
@@ -369,8 +387,8 @@ func (r *repository) Register(ctx context.Context, request model.VendorRegisterR
 }
 func (r *repository) AddProduct(ctx context.Context, request model.Product) error {
 	fmt.Println("this is in the repository Register")
-	query := `INSERT INTO product_models (name, category, status, tax,amount,units,vendor_id,discount) VALUES ($1, $2, $3, $4,$5,$6,$7,$8)`
-	_, err := r.sql.ExecContext(ctx, query, request.Name, request.Category, request.Status, request.Tax, request.Price, request.Unit, request.Vendorid, request.Discount)
+	query := `INSERT INTO product_models (name, category, status, tax,amount,units,vendor_id,discount,description) VALUES ($1, $2, $3, $4,$5,$6,$7,$8,$9)`
+	_, err := r.sql.ExecContext(ctx, query, request.Name, request.Category, request.Status, request.Tax, request.Price, request.Unit, request.Vendorid, request.Discount, request.Description)
 	if err != nil {
 		return fmt.Errorf("failed to execute insert query: %w", err)
 	}
@@ -419,6 +437,44 @@ func (r *repository) Listing(ctx context.Context, id string) ([]model.ProductLis
 			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1;`
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductList
+	for rows.Next() {
+		var product model.ProductList
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+func (r *repository) CategoryListing(ctx context.Context, category string, id string) ([]model.ProductList, error) {
+	query := `
+		SELECT 
+			product_models.name,
+			product_models.category,
+			product_models.units,
+			product_models.tax,
+			product_models.amount,
+			product_models.status,
+			product_models.discount,
+			vendor.name AS vendorName  
+		FROM 
+			product_models 
+		INNER JOIN 
+			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1 AND product_models.category ILIKE '%' || $2 || '%';`
+
+	rows, err := r.sql.QueryContext(ctx, query, id, category)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute select query: %w", err)
 	}

@@ -1,6 +1,9 @@
 package model
 
-import "net/url"
+import (
+	"net/url"
+	"time"
+)
 
 type ListAllOrders struct {
 	Name     string  `json:"name"`
@@ -59,4 +62,35 @@ type ListOrdersVendor struct {
 	Date     string  `json:"date"`
 	User     string  `json:"user"`
 	Add      string  `json:"user_ad"`
+}
+type SalesReport struct {
+	Type string `json:"type"`
+	Usid string
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+func (s *SalesReport) Valid() (err url.Values) {
+	err = url.Values{}
+	if !(s.Type == "Weekly" || s.Type == "Daily" || s.Type == "Yearly" || s.Type == "Custom") {
+		err.Add("Wrong format of Type", " Type should be in Weekly Daily Yearly Custom")
+	}
+	if s.Type == "Custom" {
+		const dateFormat = "2006-01-02"
+		fromDate, fromErr := time.Parse(dateFormat, s.From)
+		toDate, toErr := time.Parse(dateFormat, s.To)
+
+		if fromErr != nil {
+			err.Add("From", "From date should be in the format YYYY-MM-DD")
+		}
+		if toErr != nil {
+			err.Add("To", "To date should be in the format YYYY-MM-DD")
+		}
+
+		if fromErr == nil && toErr == nil && fromDate.After(toDate) {
+			err.Add("Date Range", "From date should not be greater than To date")
+		}
+	}
+
+	return err
 }

@@ -15,6 +15,40 @@ type Product struct {
 	Discount    float64 `json:"discount"`
 	Description string  `json:"description"`
 }
+type UpdateProduct struct {
+	Unit  float64 `json:"units"`
+	Tax   float64 `json:"tax"`
+	Price float64 `json:"amount"`
+
+	Status          bool    `json:"status"`
+	Discount        float64 `json:"discount"`
+	Description     string  `json:"description"`
+	Pid             string  `json:"pid"`
+	ClearDiscount   string  `json:"clrdis"`
+	ClearUnit       string  `json:"clrunit"`
+	ClProductStatus string  `json:"p_status"`
+}
+
+func (u *UpdateProduct) Valid() url.Values {
+	err := url.Values{}
+	if !(u.ClearDiscount == "Yes" || u.ClearDiscount == "No") {
+		err.Add("ClearDiscount", "Should be Valid Yes or No")
+
+	}
+	if !(u.ClearUnit == "Yes" || u.ClearUnit == "No") {
+		err.Add("ClearUnit", "Should be Valid Yes or No")
+
+	}
+	if !(u.ClProductStatus == "Yes" || u.ClProductStatus == "No") {
+		err.Add("Clear ProductStatus", "Should be Valid Yes or No")
+
+	}
+	if u.Pid == "" {
+		err.Add("Product id", "Product id id null")
+	}
+	return err
+}
+
 type ProductList struct {
 	Name       string  `json:"name"`
 	Category   string  `json:"category"`
@@ -35,6 +69,32 @@ type ProductListUsers struct {
 	Status     bool    `json:"status"`
 	Discount   float64 `json:"discount"`
 	Pid        string  `json:"pid"`
+}
+type ProductListingUsers struct {
+	Name     string  `json:"name"`
+	Category string  `json:"category"`
+	Unit     float64 `json:"units"`
+	Tax      float64 `json:"tax"`
+	Price    float64 `json:"amount"`
+	Status   bool    `json:"status"`
+	Discount float64 `json:"discount"`
+	Pid      string  `json:"pid"`
+	Pdetail  string  `json:"pdetail"`
+}
+type ProductListDetailed struct {
+	Name       string  `json:"name"`
+	Category   string  `json:"category"`
+	Unit       float64 `json:"units"`
+	Tax        float64 `json:"tax"`
+	Price      float64 `json:"amount"`
+	VendorName string  `json:"vendorName"`
+	Status     bool    `json:"status"`
+	Discount   float64 `json:"discount"`
+	Pid        string  `json:"pid"`
+	VEmail     string  `json:"vendorEmail"`
+	VGst       string  `json:"vendorgst"`
+	VId        string  `json:"vendorid"`
+	Pds        string  `json:"pds"`
 }
 
 func (u *Product) Valid() url.Values {

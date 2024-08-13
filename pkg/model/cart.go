@@ -31,7 +31,7 @@ type UserWishview struct {
 type Wishlist struct {
 	Productid string `json:"product_id"`
 
-	Userid string `json:"user_id"`
+	Userid string
 }
 type Coupon struct {
 	Code      string `json:"code"`

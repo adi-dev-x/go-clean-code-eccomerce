@@ -6,6 +6,7 @@ import (
 	services "myproject/pkg/client"
 	"myproject/pkg/config"
 	"myproject/pkg/model"
+	"strings"
 	"sync"
 
 	"golang.org/x/crypto/bcrypt"
@@ -17,13 +18,16 @@ type Service interface {
 	Login(ctx context.Context, request model.VendorLoginRequest) error
 	Listing(ctx context.Context, id string) ([]model.ProductList, error)
 	OtpLogin(ctx context.Context, request model.VendorOtp) error
-	AddProduct(ctx context.Context, request model.Product, username string) error
+
+	///product
+	UpdateProduct(ctx context.Context, updatedData model.UpdateProduct, username string) error
+	CategoryListing(ctx context.Context, category string, id string) ([]model.ProductList, error)
 	LatestListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PhighListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PlowListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InAZListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InZAListing(ctx context.Context, id string) ([]model.ProductList, error)
-
+	AddProduct(ctx context.Context, request model.Product, username string) error
 	///listing orders
 	ListAllOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 	ListReturnedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
@@ -47,6 +51,59 @@ func NewService(repo Repository, services services.Services) Service {
 		services: services,
 	}
 }
+func (s *service) UpdateProduct(ctx context.Context, updatedData model.UpdateProduct, username string) error {
+	var query string
+	var args []interface{}
+	id := s.repo.Getid(ctx, username)
+
+	query = "UPDATE product_models SET"
+
+	if updatedData.Description != "" {
+		query += " description = ?,"
+		args = append(args, updatedData.Description)
+	}
+	if updatedData.Price > 0 {
+		query += " amount = ?,"
+		args = append(args, updatedData.Price)
+	}
+	if updatedData.ClearUnit == "Yes" {
+		query += " units = ?,"
+		args = append(args, 0)
+	} else {
+		if updatedData.Unit > 0 {
+			query += " units = ?,"
+			args = append(args, updatedData.Unit)
+		}
+	}
+	if updatedData.ClearDiscount == "Yes" {
+		query += " discount = ?,"
+		args = append(args, 0)
+	} else {
+		if updatedData.Discount > 0 {
+			query += " discount = ?,"
+			args = append(args, updatedData.Discount)
+		}
+	}
+	if updatedData.ClProductStatus == "Yes" {
+		query += " status = ?,"
+		args = append(args, false)
+	} else {
+		if updatedData.Status {
+			query += " status = ?,"
+			args = append(args, true)
+		}
+	}
+
+	query = strings.TrimSuffix(query, ",")
+
+	query += " WHERE vendor_id = ?"
+	args = append(args, id)
+	query += " AND id = ?"
+	args = append(args, updatedData.Pid)
+	fmt.Println("this is the UpdateUser ", query, " kkk ", args)
+
+	return s.repo.UpdateProduct(ctx, query, args)
+}
 
 // /returning
 func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error {
@@ -67,6 +124,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	}
 	var w sync.WaitGroup
 
+	VErr0 := make(chan error, 1)
 	VErr := make(chan error, 1)
 	VErr2 := make(chan error, 1)
 	VErr3 := make(chan error, 1)
@@ -75,7 +133,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	go func() {
 		defer w.Done()
 		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
-		VErr <- err
+		VErr0 <- err
 	}()
 	go func() {
 		defer w.Done()
@@ -119,11 +177,15 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	}()
 	go func() {
 		w.Wait()
+		close(VErr0)
 		close(VErr)
 		close(VErr2)
 		close(VErr3)
 		close(VErr4)
 	}()
+	if err := <-VErr0; err != nil {
+		return fmt.Errorf("failed to send order  return  email: %w", err)
+	}
 	if err := <-VErr; err != nil {
 		return fmt.Errorf("failed to send order  return  email: %w", err)
 	}
@@ -316,6 +378,16 @@ func (s *service) LatestListing(ctx context.Context, id string) ([]model.Product
 		return nil, ctx.Err()
 	default:
 		return s.repo.LatestListing(ctx, d)
+	}
+}
+func (s *service) CategoryListing(ctx context.Context, category string, id string) ([]model.ProductList, error) {
+	d := s.repo.Getid(ctx, id)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.CategoryListing(ctx, category, d)
 	}
 }
 func (s *service) PhighListing(ctx context.Context, id string) ([]model.ProductList, error) {

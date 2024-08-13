@@ -7,31 +7,30 @@ import (
 	"sync"
 
 	"fmt"
-	services "myproject/pkg/client"
-	"myproject/pkg/config"
-	"myproject/pkg/model"
-
-	//"sync"
-
-	"regexp"
-	"strings"
-
-	// "github.com/go-resty/resty/v2"
-	//"github.com/go-playground/validator/v10/translations/id"
 	"github.com/razorpay/razorpay-go"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	services "myproject/pkg/client"
+	"myproject/pkg/config"
+	"myproject/pkg/model"
+	"regexp"
+	"strings"
 )
 
 type Service interface {
 	Register(ctx context.Context, request model.UserRegisterRequest) error
 	Login(ctx context.Context, request model.UserLoginRequest) error
-	Listing(ctx context.Context) ([]model.ProductListUsers, error)
-	LatestListing(ctx context.Context) ([]model.ProductList, error)
-	PhighListing(ctx context.Context) ([]model.ProductList, error)
-	PlowListing(ctx context.Context) ([]model.ProductList, error)
-	InAZListing(ctx context.Context) ([]model.ProductList, error)
-	InZAListing(ctx context.Context) ([]model.ProductList, error)
+	//Product listing
+	Listing(ctx context.Context) ([]model.ProductListingUsers, error)
+	CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error)
+	LatestListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	PhighListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	PlowListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	InAZListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	InZAListing(ctx context.Context) ([]model.ProductListingUsers, error)
+
+	////
 	OtpLogin(ctx context.Context, request model.UserOtp) error
 	UpdateUser(ctx context.Context, updatedData model.UserRegisterRequest) error
 
@@ -368,16 +367,17 @@ func (s *service) UpdateToCart(ctx context.Context, request model.Cart, username
 	return s.repo.UpdateToCart(ctx, request)
 }
 func (s *service) AddToWish(ctx context.Context, request model.Wishlist) error {
-	if request.Productid == "" || request.Userid == "" {
+	if request.Productid == "" {
 		fmt.Println("this is in the service error value missing")
 		return fmt.Errorf("missing values")
 	}
-
-	_, err := s.repo.ListingByid(ctx, request.Productid)
-	if err != nil {
-		fmt.Println("failed to get product:", err)
-		return fmt.Errorf("failed to get product", err)
-	}
+	id := s.repo.Getid(ctx, request.Userid)
+	request.Userid = id
+	// _, err := s.repo.ListingByid(ctx, request.Productid)
+	// if err != nil {
+	// 	fmt.Println("failed to get product:", err)
+	// 	return fmt.Errorf("failed to get product", err)
+	// }
 
 	return s.repo.AddToWish(ctx, request)
 }
@@ -950,12 +950,28 @@ func (s *service) UpdateUser(ctx context.Context, updatedData model.UserRegister
 	return s.repo.UpdateUser(ctx, query, args)
 }
 
-func (s *service) Listing(ctx context.Context) ([]model.ProductListUsers, error) {
+func (s *service) Listing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 		return s.repo.Listing(ctx)
+	}
+}
+func (s *service) ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.ListingSingle(ctx, id)
+	}
+}
+func (s *service) CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.CategoryListing(ctx, category)
 	}
 }
 func (s *service) Listcart(ctx context.Context, id string) ([]model.Usercartview, error) {
@@ -974,7 +990,7 @@ func (s *service) ListWish(ctx context.Context, id string) ([]model.UserWishview
 		return s.repo.ListWish(ctx, id)
 	}
 }
-func (s *service) LatestListing(ctx context.Context) ([]model.ProductList, error) {
+func (s *service) LatestListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -982,7 +998,7 @@ func (s *service) LatestListing(ctx context.Context) ([]model.ProductList, error
 		return s.repo.LatestListing(ctx)
 	}
 }
-func (s *service) PhighListing(ctx context.Context) ([]model.ProductList, error) {
+func (s *service) PhighListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -990,7 +1006,7 @@ func (s *service) PhighListing(ctx context.Context) ([]model.ProductList, error)
 		return s.repo.PhighListing(ctx)
 	}
 }
-func (s *service) PlowListing(ctx context.Context) ([]model.ProductList, error) {
+func (s *service) PlowListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -998,7 +1014,7 @@ func (s *service) PlowListing(ctx context.Context) ([]model.ProductList, error) 
 		return s.repo.PlowListing(ctx)
 	}
 }
-func (s *service) InAZListing(ctx context.Context) ([]model.ProductList, error) {
+func (s *service) InAZListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -1007,7 +1023,7 @@ func (s *service) InAZListing(ctx context.Context) ([]model.ProductList, error) 
 	}
 }
 
-func (s *service) InZAListing(ctx context.Context) ([]model.ProductList, error) {
+func (s *service) InZAListing(ctx context.Context) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
