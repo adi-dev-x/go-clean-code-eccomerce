@@ -2,19 +2,25 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	// "os"
 )
 
 func main() {
-	// Create and initialize a map
-	myMap := map[string]int{
-		"apple":  1,
-		"banana": 2,
-		"cherry": 3,
-	}
+	// Define the file server to serve files from the current directory
+	fileServer := http.FileServer(http.Dir("./"))
 
-	// Iterate over the map and print the key-value pairs
-	fmt.Println("Map iteration:")
-	for key, value := range myMap {
-		fmt.Printf("%s: %d\n", key, value)
+	// Serve files from the root URL
+	http.Handle("/", fileServer)
+
+	// Define the port on which the server will listen
+	port := "8081"
+	fmt.Printf("Starting server at http://localhost:%s/\n", port)
+
+	// Start the server
+	err := http.ListenAndServe(":"+port, nil)
+	if err != nil {
+		log.Fatal("Failed to start server: ", err)
 	}
 }

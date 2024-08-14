@@ -18,6 +18,8 @@ type Repository interface {
 	PlowListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InAZListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InZAListing(ctx context.Context, id string) ([]model.ProductList, error)
+	GetCoupnExist(ctx context.Context, id string) (string, error)
+	Deletecoupon(ctx context.Context, id string) error
 }
 
 type repository struct {
@@ -42,12 +44,30 @@ func (r *repository) Register(ctx context.Context, request model.AdminRegisterRe
 }
 func (r *repository) Addcoupon(ctx context.Context, request model.Coupon) error {
 	fmt.Println("this is in the repository Register")
-	query := `INSERT INTO coupon (code, expiry, min_amount,amount) VALUES ($1, $2, $3, $4)`
-	_, err := r.sql.ExecContext(ctx, query, request.Code, request.Expiry, request.Minamount, request.Amount)
+	query := `INSERT INTO coupon (code, expiry, min_amount,amount,max_amount) VALUES ($1, $2, $3, $4,$5)`
+	_, err := r.sql.ExecContext(ctx, query, request.Code, request.Expiry, request.Minamount, request.Amount, request.Maxamount)
 	if err != nil {
 		return fmt.Errorf("failed to execute insert query: %w", err)
 	}
 
+	return nil
+}
+func (r *repository) GetCoupnExist(ctx context.Context, id string) (string, error) {
+	query := `SELECT id FROM coupon WHERE code = $1 `
+	var exist string
+	err := r.sql.QueryRowContext(ctx, query, id).Scan(&exist)
+	fmt.Println("this is in the repo layerrr for GetCoupnExist!!!", exist)
+	if err != nil {
+		return "", fmt.Errorf("failed to get cart: %w", err)
+	}
+	return exist, nil
+}
+func (r *repository) Deletecoupon(ctx context.Context, id string) error {
+	query := `UPDATE coupon SET used = false WHERE id = $1`
+	_, err := r.sql.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to update coupon: %w", err)
+	}
 	return nil
 }
 

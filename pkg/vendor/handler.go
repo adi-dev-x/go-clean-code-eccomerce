@@ -176,7 +176,7 @@ func (h *Handler) SalesReport(c echo.Context) error {
 	}
 	fmt.Println("this is the data ", orders)
 
-	return h.respondWithData(c, http.StatusOK, "success", nil)
+	return h.respondWithData(c, http.StatusOK, "success", orders)
 }
 func (h *Handler) ListFailedOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")

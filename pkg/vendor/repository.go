@@ -49,6 +49,7 @@ type Repository interface {
 	UpdateOiStatus(ctx context.Context, id string) error
 	CreditWallet(ctx context.Context, id string, amt float64) (string, error)
 	UpdateWalletTransaction(ctx context.Context, value interface{}) error
+	ChangeOrderStatus(ctx context.Context, id string) error
 }
 
 type repository struct {
@@ -75,6 +76,7 @@ func (r *repository) UpdateProduct(ctx context.Context, query string, args []int
 	return nil
 }
 func (r *repository) UpdateWalletTransaction(ctx context.Context, value interface{}) error {
+	fmt.Println("changing innnnn   !!!!!! UpdateWalletTransaction")
 	values, ok := value.([]interface{})
 	if !ok {
 		return fmt.Errorf("invalid input")
@@ -123,6 +125,23 @@ func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (
 
 	return Wallet_id, nil
 }
+func (r *repository) ChangeOrderStatus(ctx context.Context, id string) error {
+	fmt.Println("changing in the order status QQQQ")
+	query := `
+	UPDATE orders
+	SET status ='Cancelled'
+	WHERE id = $1
+	
+`
+
+	err := r.sql.QueryRowContext(ctx, query, id)
+
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return nil
+}
 
 // /
 func (r *repository) UpdateOiStatus(ctx context.Context, id string) error {
@@ -166,7 +185,7 @@ func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (
 	var order model.ListAllOrdersCheck
 
 	query := `SELECT p.name,  oi.quantity,   mo.status, oi.returned, 
-    oi.price,oi.product_id AS pid,DATE(oi.created_at) AS date,mo.user_id ,v.id AS vid,u.email AS usmail
+    oi.price,oi.product_id AS pid,DATE(oi.created_at) AS date,mo.user_id ,v.id AS vid,u.email AS usmail,mo.id AS mid
      FROM order_items oi 
     JOIN  product_models p ON oi.product_id = p.id 
     JOIN  orders mo ON oi.order_id = mo.id 
@@ -175,7 +194,7 @@ func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (
     WHERE  v.id = $1 AND oi.id = $2;
   
 `
-	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid, &order.Vid, &order.Usmail)
+	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid, &order.Vid, &order.Usmail, &order.Moid)
 	if err != nil {
 		return model.ListAllOrdersCheck{}, fmt.Errorf("error in exequting query in  GetSingleItem")
 	}
@@ -188,7 +207,8 @@ func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.List
     p.name, oi.quantity, mo.status, oi.returned, oi.price, oi.product_id AS pid, 
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
-    COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad 
+    COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad, 
+     oi.id AS oid
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
     JOIN vendor v ON p.vendor_id = v.id 
@@ -207,7 +227,7 @@ func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.List
 
 	for rows.Next() {
 		var order model.ListOrdersVendor
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add, &order.Oid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -375,8 +395,8 @@ func (r *repository) SalesReportOrdersYearly(ctx context.Context, vendorID strin
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
 	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
-	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY checks;
+	AS user_ad ,DATE(oi.created_at) AS date FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' AND oi.returned=false ORDER BY checks;
 `
 
 	var orders []model.ListOrdersVendor
@@ -389,7 +409,7 @@ func (r *repository) SalesReportOrdersYearly(ctx context.Context, vendorID strin
 
 	for rows.Next() {
 		var order model.ListOrdersVendor
-		err := rows.Scan(&order.ListDate, &order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.User, &order.Add)
+		err := rows.Scan(&order.ListDate, &order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.User, &order.Add, &order.Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -404,12 +424,12 @@ func (r *repository) SalesReportOrdersYearly(ctx context.Context, vendorID strin
 }
 func (r *repository) SalesReportOrdersMonthly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error) {
 
-	query := `SELECT EXTRACT(MONTH FROM oi.created_at) AS check, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
+	query := `SELECT EXTRACT(MONTH FROM oi.created_at) AS checks, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
 	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
-	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY check;
+	AS user_ad, DATE(oi.created_at) AS date FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' AND oi.returned=false ORDER BY checks;
 `
 
 	var orders []model.ListOrdersVendor
@@ -422,7 +442,7 @@ func (r *repository) SalesReportOrdersMonthly(ctx context.Context, vendorID stri
 
 	for rows.Next() {
 		var order model.ListOrdersVendor
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		err := rows.Scan(&order.ListDate, &order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.User, &order.Add, &order.Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -437,12 +457,12 @@ func (r *repository) SalesReportOrdersMonthly(ctx context.Context, vendorID stri
 }
 func (r *repository) SalesReportOrdersWeekly(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error) {
 
-	query := `SELECT EXTRACT(WEEK FROM oi.created_at) AS check, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
+	query := `SELECT EXTRACT(WEEK FROM oi.created_at) AS checks, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
 	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
-	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY check;
+	AS user_ad ,DATE(oi.created_at) AS date FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' AND oi.returned=false ORDER BY checks;
 `
 
 	var orders []model.ListOrdersVendor
@@ -455,7 +475,7 @@ func (r *repository) SalesReportOrdersWeekly(ctx context.Context, vendorID strin
 
 	for rows.Next() {
 		var order model.ListOrdersVendor
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		err := rows.Scan(&order.ListDate, &order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.User, &order.Add, &order.Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -470,12 +490,12 @@ func (r *repository) SalesReportOrdersWeekly(ctx context.Context, vendorID strin
 }
 func (r *repository) SalesReportOrdersDaily(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error) {
 
-	query := `SELECT EXTRACT(DAY FROM oi.created_at) AS check, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
+	query := `SELECT EXTRACT(DAY FROM oi.created_at) AS checks, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
 	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
-	WHERE v.id = $1 AND mo.status = 'Completed' ORDER BY check;
+	AS user_ad ,DATE(oi.created_at) AS date FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	WHERE v.id = $1 AND mo.status = 'Completed' AND oi.returned=false ORDER BY checks;
 `
 
 	var orders []model.ListOrdersVendor
@@ -488,7 +508,7 @@ func (r *repository) SalesReportOrdersDaily(ctx context.Context, vendorID string
 
 	for rows.Next() {
 		var order model.ListOrdersVendor
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		err := rows.Scan(&order.ListDate, &order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.User, &order.Add, &order.Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -517,48 +537,80 @@ func (r *repository) GetSalesFactByDate(ctx context.Context, filterType string, 
 			       COUNT(*) AS total_orders
 			FROM order_items oi
 			JOIN product_models pm ON oi.product_id = pm.id
+			JOIN orders o ON oi.order_id = o.id
 			WHERE pm.vendor_id = $1
+			AND EXTRACT(YEAR FROM oi.created_at) = EXTRACT(YEAR FROM CURRENT_DATE) 
+			 AND oi.returned=false AND o.status = 'Completed'
 			GROUP BY year`
 		args = append(args, vendorID)
-	case "Monthly":
+	case "Weekly":
 		query = `
-			SELECT EXTRACT(MONTH FROM oi.created_at) AS month, 
+			SELECT EXTRACT(WEEK FROM oi.created_at) AS week, 
 			       SUM(oi.price * oi.quantity) AS revenue,
 			       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
 			       SUM(oi.discount * oi.quantity) AS total_discount,
 			       COUNT(*) AS total_orders
 			FROM order_items oi
 			JOIN product_models pm ON oi.product_id = pm.id
-			WHERE EXTRACT(YEAR FROM oi.created_at) = $1 AND pm.vendor_id = $2
-			GROUP BY month`
-		args = append(args, startDate.Year(), vendorID)
+			JOIN orders o ON oi.order_id = o.id
+
+			WHERE pm.vendor_id = $1  AND oi.returned=false AND o.status = 'Completed'
+			GROUP BY week`
+		args = append(args, vendorID)
+	case "Monthly":
+		fmt.Println("this is inside monthly")
+
+		query = `
+		SELECT 
+        EXTRACT(MONTH FROM oi.created_at) AS month, 
+		SUM(oi.price * oi.quantity) AS revenue,
+        SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales,
+        SUM(oi.discount * oi.quantity) AS total_discount,
+		COUNT(*) AS total_orders
+        FROM order_items oi
+        JOIN  product_models pm ON oi.product_id = pm.id
+		JOIN orders o ON oi.order_id = o.id
+        WHERE  pm.vendor_id = $1 AND EXTRACT(MONTH FROM oi.created_at) = EXTRACT(MONTH FROM CURRENT_DATE) 
+		AND EXTRACT(YEAR FROM oi.created_at) = EXTRACT(YEAR FROM CURRENT_DATE)  AND oi.returned=false
+		AND o.status = 'Completed'
+		GROUP BY   month ORDER BY  month;
+        `
+		args = append(args, vendorID)
 	case "Daily":
 		query = `
-			SELECT EXTRACT(DAY FROM oi.created_at) AS day, 
-			       SUM(oi.price * oi.quantity) AS revenue,
-			       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
-			       SUM(oi.discount * oi.quantity) AS total_discount,
-			       COUNT(*) AS total_orders
+         SELECT EXTRACT(DAY FROM oi.created_at) AS day, 
+          SUM(oi.price * oi.quantity) AS revenue,
+          SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
+          SUM(oi.discount * oi.quantity) AS total_discount,
+          COUNT(*) AS total_orders
 			FROM order_items oi
-			JOIN product_models pm ON oi.product_id = pm.id
-			WHERE EXTRACT(YEAR FROM oi.created_at) = $1 
-			      AND EXTRACT(MONTH FROM oi.created_at) = $2 
-			      AND pm.vendor_id = $3
-			GROUP BY day`
-		args = append(args, startDate.Year(), int(startDate.Month()), vendorID)
+		JOIN product_models pm ON oi.product_id = pm.id
+		JOIN orders o ON oi.order_id = o.id
+		WHERE DATE(oi.created_at) = DATE(CURRENT_DATE)
+        AND pm.vendor_id = $1
+       AND oi.returned = false
+       AND o.status = 'Completed'
+		GROUP BY day;
+			
+			`
+		args = append(args, vendorID)
 	case "Custom":
-		fmt.Println("inside the custom switch")
+		fmt.Println("inside the custom switch", endDate, "!!!!", startDate)
 		query = `
-			SELECT DATE(oi.created_at) AS date, 
-			       SUM(oi.price * oi.quantity) AS revenue,
-			       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
-			       SUM(oi.discount * oi.quantity) AS total_discount,
-			       COUNT(*) AS total_orders
-			FROM order_items oi
-			JOIN product_models pm ON oi.product_id = pm.id
-			WHERE DATE(oi.created_at) BETWEEN $1 AND $2 
-			      AND pm.vendor_id = $3
-			GROUP BY date`
+		SELECT 1 AS day,
+       SUM(oi.price * oi.quantity) AS revenue,
+       SUM(oi.price * oi.quantity - oi.discount * oi.quantity) AS total_sales, 
+       SUM(oi.discount * oi.quantity) AS total_discount,
+       COUNT(*) AS total_orders
+       FROM order_items oi
+       JOIN product_models pm ON oi.product_id = pm.id
+       JOIN orders o ON oi.order_id = o.id
+       WHERE DATE(oi.created_at) BETWEEN $1 AND $2 
+       AND pm.vendor_id = $3 
+       AND oi.returned = false
+       AND o.status = 'Completed';
+	  `
+
 		args = append(args, startDate, endDate, vendorID)
 	default:
 		return nil, fmt.Errorf("invalid filter type")

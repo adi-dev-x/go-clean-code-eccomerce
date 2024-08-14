@@ -20,6 +20,7 @@ type Service interface {
 	PlowListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InAZListing(ctx context.Context, id string) ([]model.ProductList, error)
 	InZAListing(ctx context.Context, id string) ([]model.ProductList, error)
+	Deletecoupon(ctx context.Context, id string) error
 }
 
 type service struct {
@@ -95,6 +96,19 @@ func (s *service) Addcoupon(ctx context.Context, request model.Coupon) error {
 	}
 
 	return s.repo.Addcoupon(ctx, request)
+}
+func (s *service) Deletecoupon(ctx context.Context, id string) error {
+	cid, err := s.repo.GetCoupnExist(ctx, id)
+
+	if err != nil {
+		return fmt.Errorf("there is error in finding the coupon")
+	}
+	errs := s.repo.Deletecoupon(ctx, cid)
+	if errs != nil {
+		return fmt.Errorf("error in deleting")
+	}
+	return nil
+
 }
 func (s *service) Login(ctx context.Context, request model.AdminLoginRequest) error {
 	fmt.Println("this is in the service Login", request.Password)

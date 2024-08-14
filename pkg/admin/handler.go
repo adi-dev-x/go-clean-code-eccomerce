@@ -40,6 +40,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 	applicantApi.POST("/OtpLogin", h.OtpLogin)
 	applicantApi.Use(h.adminjw.AdminAuthMiddleware())
 	{
+		applicantApi.POST("/Deletecoupon", h.Deletecoupon)
 		applicantApi.POST("/Addcoupon", h.Addcoupon)
 		applicantApi.GET("/listing", h.Listing)
 		applicantApi.GET("/Latestlisting", h.LatestListing)
@@ -73,11 +74,41 @@ func (h *Handler) Addcoupon(c echo.Context) error {
 	if err := c.Bind(&request); err != nil {
 		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
 	}
-
+	errVal := request.Valid()
+	if len(errVal) > 0 {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]interface{}{"invalid-request": errVal})
+	}
 	// Validate request fields
 
 	ctx := c.Request().Context()
 	if err := h.service.Addcoupon(ctx, request); err != nil {
+		fmt.Println("this is the error !!!!!", err.Error())
+
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	fmt.Println("this is in the handler Register")
+
+	return h.respondWithData(c, http.StatusOK, "success", nil)
+}
+func (h *Handler) Deletecoupon(c echo.Context) error {
+	// Parse request body into VendorRegisterRequest
+	fmt.Println("this is in the handler AddProduct")
+	var request struct {
+		id string `json:"id"`
+	}
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+
+	if request.id == "" {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]interface{}{"invalid-request": "enter id"})
+	}
+	// Validate request fields
+
+	ctx := c.Request().Context()
+	if err := h.service.Deletecoupon(ctx, request.id); err != nil {
+		fmt.Println("this is the error !!!!!", err.Error())
+
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	fmt.Println("this is in the handler Register")

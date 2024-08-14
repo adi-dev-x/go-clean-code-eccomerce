@@ -35,6 +35,7 @@ type ListAllOrdersCheck struct {
 	Usid     string  `json:"user_id"`
 	Vid      string  `json:"vid"`
 	Usmail   string  `json:"usmail"`
+	Moid     string  `json:"mid"`
 }
 
 type ReturnOrderPost struct {
@@ -52,6 +53,13 @@ func (r *ReturnOrderPost) Valid() (err url.Values) {
 
 }
 
+type SendSalesReort struct {
+	Data      []ListOrdersVendor
+	FactsData Salesfact
+	PdfUrl    string
+	ExcelUrl  string
+}
+
 type ListOrdersVendor struct {
 	Name     string  `json:"name"`
 	Unit     int     `json:"unit"`
@@ -62,7 +70,8 @@ type ListOrdersVendor struct {
 	Date     string  `json:"date"`
 	User     string  `json:"user"`
 	Add      string  `json:"user_ad"`
-	ListDate string  `json:"check"`
+	ListDate string  `json:"checks"`
+	Oid      string  `json:"oid"`
 }
 type SalesReport struct {
 	Type string `json:"type"`

@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"net/url"
+	"time"
 )
 
 type Cart struct {
@@ -40,6 +41,42 @@ type Coupon struct {
 	Amount    int    `json:"amount"`
 	Maxamount int    `json:"max_amount"`
 }
+
+func ValidateExpiry(expiry string) error {
+	const dateFormat = "2006-01-02" // Layout for YYYY-MM-DD format
+	_, err := time.Parse(dateFormat, expiry)
+	if err != nil {
+		return fmt.Errorf("expiry date should be in YYYY-MM-DD format")
+	}
+	return nil
+}
+func (c *Coupon) Valid() (err url.Values) {
+	err = url.Values{}
+
+	if c.Code == "" {
+		err.Add("Code error", "enter code name")
+	}
+	if c.Minamount < 0 {
+		err.Add("Minamount error", "enter Minamount")
+	}
+	if c.Maxamount < 0 {
+		err.Add("Maxamount error", "enter Maxamount")
+	}
+	if c.Amount < 0 || c.Amount > 70 {
+		err.Add("Amount error", "enter Amount")
+	}
+	if c.Expiry == "" {
+		err.Add("Expiry error", "enter Expiry ")
+	} else {
+		// Validate the expiry date format
+		if validationErr := ValidateExpiry(c.Expiry); validationErr != nil {
+			err.Add("Expiry error", validationErr.Error())
+		}
+	}
+
+	return err
+}
+
 type CouponRes struct {
 	Cid         string `json:"cid"`
 	Code        string `json:"code"`

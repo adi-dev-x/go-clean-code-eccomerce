@@ -35,7 +35,7 @@ type Service interface {
 	ListFailedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 	ListCompletedOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 	ListPendingOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
-	SalesReport(ctx context.Context, id string, request model.SalesReport) ([]model.ListOrdersVendor, error)
+	SalesReport(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReort, error)
 	//returning
 	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
 }
@@ -135,7 +135,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	VErr2 := make(chan error, 1)
 	VErr3 := make(chan error, 1)
 	VErr4 := make(chan error, 1)
-	w.Add(4)
+	w.Add(5)
 	go func() {
 		defer w.Done()
 		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
@@ -204,6 +204,11 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	if err := <-VErr4; err != nil {
 		return fmt.Errorf("failed to update to redund status: %w", err)
 	}
+	er := s.repo.ChangeOrderStatus(ctx, p.Moid)
+	fmt.Println(er)
+	// if errM != nil {
+	// 	return fmt.Errorf("error in updating ")
+	// }
 
 	return nil
 
@@ -254,7 +259,7 @@ func (s *service) ListCompletedOrders(ctx context.Context, username string) ([]m
 
 	return orders, nil
 }
-func (s *service) SalesReport(ctx context.Context, username string, request model.SalesReport) ([]model.ListOrdersVendor, error) {
+func (s *service) SalesReport(ctx context.Context, username string, request model.SalesReport) (model.SendSalesReort, error) {
 	id := s.repo.Getid(ctx, username)
 
 	// Parse dates
@@ -265,22 +270,22 @@ func (s *service) SalesReport(ctx context.Context, username string, request mode
 	if request.Type == "Custom" {
 		startDate, err = time.Parse(dateFormat, request.From)
 		if err != nil {
-			return nil, fmt.Errorf("invalid From date format: %w", err)
+			return model.SendSalesReort{}, fmt.Errorf("invalid From date format: %w", err)
 		}
 		endDate, err = time.Parse(dateFormat, request.To)
 		if err != nil {
-			return nil, fmt.Errorf("invalid To date format: %w", err)
+			return model.SendSalesReort{}, fmt.Errorf("invalid To date format: %w", err)
 		}
 		orders, err = s.repo.SalesReportOrdersCustom(ctx, startDate, endDate, id)
 		fmt.Println("in data!!", orders)
 		if err != nil {
-			return nil, fmt.Errorf("error in receiving data")
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving data")
 		}
 	}
 	if request.Type == "Yearly" {
 		orders, err = s.repo.SalesReportOrdersYearly(ctx, id)
 		if err != nil {
-			return nil, fmt.Errorf("error in receiving yearly data: %w", err)
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving yearly data: %w", err)
 		}
 
 	}
@@ -288,7 +293,7 @@ func (s *service) SalesReport(ctx context.Context, username string, request mode
 	if request.Type == "Monthly" {
 		orders, err = s.repo.SalesReportOrdersMonthly(ctx, id)
 		if err != nil {
-			return nil, fmt.Errorf("error in receiving monthly data: %w", err)
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving monthly data: %w", err)
 		}
 
 	}
@@ -296,7 +301,7 @@ func (s *service) SalesReport(ctx context.Context, username string, request mode
 	if request.Type == "Weekly" {
 		orders, err = s.repo.SalesReportOrdersWeekly(ctx, id)
 		if err != nil {
-			return nil, fmt.Errorf("error in receiving weekly data: %w", err)
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving weekly data: %w", err)
 		}
 
 	}
@@ -304,7 +309,7 @@ func (s *service) SalesReport(ctx context.Context, username string, request mode
 	if request.Type == "Daily" {
 		orders, err = s.repo.SalesReportOrdersDaily(ctx, id)
 		if err != nil {
-			return nil, fmt.Errorf("error in receiving daily data: %w", err)
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving daily data: %w", err)
 		}
 
 	}
@@ -312,10 +317,28 @@ func (s *service) SalesReport(ctx context.Context, username string, request mode
 	// Call repository function
 	salesFacts, err := s.repo.GetSalesFactByDate(ctx, request.Type, startDate, endDate, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get sales facts: %w", err)
+		return model.SendSalesReort{}, fmt.Errorf("failed to get sales facts: %w", err)
 	}
-	fmt.Println(salesFacts)
+	fmt.Println("valueeee in salesFact!!!", salesFacts)
+	if salesFacts == nil {
+		return model.SendSalesReort{}, nil
+	}
+	slFact := salesFacts[0]
+	name, err := s.services.GenerateDailySalesReportExcel(orders, slFact, request.Type, id)
+	fmt.Println(name, "@@@@@@@", err)
+	excelfurl := "http://localhost:8081/" + name
+	pname, err := s.services.GenerateDailySalesReportPDF(orders, slFact, request.Type, id)
+	fmt.Println(pname, "@@@@@@@", err)
+	pdffurl := "http://localhost:8081/" + pname
 
+	fmt.Println(excelfurl, "  --  ", pdffurl)
+	var data model.SendSalesReort
+	data.Data = orders
+	data.FactsData = slFact
+	data.ExcelUrl = excelfurl
+	data.PdfUrl = pdffurl
+
+	return data, nil
 	// ReportChan := make(chan model.Salesfact)
 	// OrdersChan := make(chan []model.ListOrdersVendor)
 	// var wg sync.WaitGroup
@@ -349,7 +372,6 @@ func (s *service) SalesReport(ctx context.Context, username string, request mode
 	// 	return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
 	// }
 
-	return nil, nil
 }
 func (s *service) ListPendingOrders(ctx context.Context, username string) ([]model.ListOrdersVendor, error) {
 	id := s.repo.Getid(ctx, username)

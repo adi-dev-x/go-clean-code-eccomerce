@@ -61,7 +61,7 @@ type Repository interface {
 	///cart
 	DeleteCart(ctx context.Context, id string) error
 	GetCartExist(ctx context.Context, id string) (string, error)
-	UpdateUsestatusCoupon(ctx context.Context, id string) error
+	UpdateUsestatusCoupon(ctx context.Context, couponId string, id string) error
 	UpdateOrderStatus(ctx context.Context, id string, status string) error
 	UpdatePaymentStatus(ctx context.Context, id string, status string) error
 	ItemExistsInCart(ctx context.Context, id string, status string) (bool, error)
@@ -75,13 +75,14 @@ type Repository interface {
 	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error)
 	IncreaseStock(ctx context.Context, id string, unit int) error
 	UpdateOiStatus(ctx context.Context, id string) error
-
+	////
+	CheckCouponExist(ctx context.Context, couponID string, userID string) (bool, error)
 	///wallet
 	CreditWallet(ctx context.Context, id string, amt float64) (string, error)
 	UpdateWallet(ctx context.Context, value interface{}) (string, error)
 	UpdateWalletTransaction(ctx context.Context, value interface{}) error
 	GetWallAmt(ctx context.Context, id string, amount int) float32
-
+	GetCoupnExist(ctx context.Context, id string) (string, error)
 	//transaction
 	ListAllTransactions(ctx context.Context, id string) ([]model.UserTransactions, error)
 
@@ -398,15 +399,14 @@ func (r *repository) UpdatePaymentStatus(ctx context.Context, id string, status 
 	return nil
 
 }
-func (r *repository) UpdateUsestatusCoupon(ctx context.Context, id string) error {
+func (r *repository) UpdateUsestatusCoupon(ctx context.Context, couponId string, id string) error {
 	query := `
-	UPDATE coupon SET used = true WHERE id = $1;
+	INSERT INTO coupon_usages (coupon_id, user_id)
+	VALUES ($1, $2);
 `
-
-	_, err := r.sql.ExecContext(ctx, query, id)
-
+	_, err := r.sql.ExecContext(ctx, query, couponId, id)
 	if err != nil {
-		return fmt.Errorf("failed to execute update query: %w", err)
+		return fmt.Errorf("failed to insert coupon usage: %w", err)
 	}
 	return nil
 
@@ -818,7 +818,7 @@ func (r *repository) GetCoupon(ctx context.Context, id string, amount int) model
 	var coupon model.CouponRes
 	fmt.Println("this is the coupon check amountsss !!!", amount, "!!!!!! this is id  ", id)
 
-	var query = `SELECT id AS cid, code, expiry, CURRENT_DATE AS current_date, CASE WHEN TO_DATE(expiry, 'DD/MM/YYYY') < CURRENT_DATE THEN true ELSE false END AS is_expired, 
+	var query = `SELECT id AS cid, code, expiry, CURRENT_DATE AS current_date, CASE WHEN TO_DATE(expiry, 'YYYY-MM-DD') < CURRENT_DATE THEN true ELSE false END AS is_expired, 
 	CASE WHEN $1 > min_amount THEN true ELSE false END AS is_eligible, min_amount, amount, used,max_amount FROM coupon WHERE id = $2;`
 
 	err := r.sql.QueryRowContext(ctx, query, amount, id).Scan(
@@ -879,7 +879,35 @@ func (r *repository) GetSpecificCart(ctx context.Context, userid string, pis str
 	if err != nil {
 		return model.Cart{}, fmt.Errorf("failed to get cart: %w", err)
 	}
-	return cart, nil
+	return cart, nil //GetCartExist
+}
+func (r *repository) GetCoupnExist(ctx context.Context, id string) (string, error) {
+	query := `SELECT id FROM coupon WHERE code = $1 `
+	var exist string
+	err := r.sql.QueryRowContext(ctx, query, id).Scan(&exist)
+	fmt.Println("this is in the repo layerrr for GetCoupnExist!!!", exist)
+	if err != nil {
+		return "", fmt.Errorf("failed to get cart: %w", err)
+	}
+	return exist, nil
+}
+func (r *repository) CheckCouponExist(ctx context.Context, couponID string, userID string) (bool, error) {
+	query := `
+        SELECT EXISTS (
+            SELECT 1
+            FROM coupon_usages
+            WHERE coupon_id = $1
+              AND user_id = $2
+        );
+    `
+
+	var exists bool
+	err := r.sql.QueryRowContext(ctx, query, couponID, userID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check coupon usage existence: %w", err)
+	}
+
+	return exists, nil
 }
 func (r *repository) GetCartExist(ctx context.Context, id string) (string, error) {
 	query := `SELECT id FROM cart WHERE user_id = $1 LIMIT 1`

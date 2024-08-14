@@ -459,7 +459,13 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 		return model.RZpayment{}, nil, stErr
 	}
 
-	cid := request.Couponid
+	cidc := request.Couponid
+	cid, err := s.repo.GetCoupnExist(ctx, cidc)
+
+	// if err!=nil {
+	//   return model.RZpayment{},fmt.Errorf("Error in retriving the coupon"),nil
+	// }
+
 	PayType := request.Type
 	fmt.Println("klkl", PayType)
 	couponAmt := 0
@@ -473,7 +479,17 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 
 	}
 	if cid != "" {
+		fmt.Println("this is cccccccc-----ccccc1111", cid)
 		coupon = s.repo.GetCoupon(ctx, cid, amount)
+		checkCo, _ := s.repo.CheckCouponExist(ctx, cid, id)
+		fmt.Println("checkCo !!! workinggg !!!!", checkCo)
+		if checkCo {
+			fmt.Println("checkCo !!! workinggg")
+			return model.RZpayment{}, fmt.Errorf("invalid", "coupon already added"), nil
+		}
+
+		fmt.Println("this is cccccccc-----ccccc", checkCo)
+		fmt.Println("this is cccccccc-----22", coupon)
 		errValues := coupon.Valid()
 		if len(errValues) > 0 {
 			// return fmt.Errorf(map[string]interface{}{"invalid": errValues})
@@ -590,7 +606,7 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 			defer wg.Done()
 			if cid != "" {
 				fmt.Println("this is the couponnnnn!!!!!", cid)
-				err := s.repo.UpdateUsestatusCoupon(ctx, cid)
+				err := s.repo.UpdateUsestatusCoupon(ctx, cid, id)
 				if err != nil {
 					j <- err
 				} else {
@@ -723,7 +739,7 @@ func (s *service) PaymentSuccess(ctx context.Context, rz model.RZpayment, userna
 		defer wg.Done()
 		if rz.Cid != "" {
 			fmt.Println("this is the couponnnnn!!!!!", rz.Cid)
-			err := s.repo.UpdateUsestatusCoupon(ctx, rz.Cid)
+			err := s.repo.UpdateUsestatusCoupon(ctx, rz.Cid, id)
 			if err != nil {
 				CoUpstat <- err
 			} else {
