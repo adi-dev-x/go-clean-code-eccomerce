@@ -58,6 +58,9 @@ type Service interface {
 
 	ListAllTransactions(ctx context.Context, username string) ([]model.UserTransactions, error)
 	ListTypeTransactions(ctx context.Context, username string, ty string) ([]model.UserTransactions, error)
+
+	/// list main orders
+
 }
 type service struct {
 	repo     Repository

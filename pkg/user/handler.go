@@ -92,6 +92,9 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listCreditTransactions", h.ListCreditTransactions)
 		applicantApi.GET("/listDebitTransactions", h.ListDebitTransactions)
 
+		///// list main orders
+		//applicantApi.GET("/listAllOrders", h.ListAllOrders)
+
 	}
 
 	engine.GET("/RazorPay", func(c echo.Context) error {

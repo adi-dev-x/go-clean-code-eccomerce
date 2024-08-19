@@ -16,11 +16,18 @@ type Service interface {
 	OtpLogin(ctx context.Context, request model.VendorOtp) error
 	Addcoupon(ctx context.Context, request model.Coupon) error
 	LatestListing(ctx context.Context) ([]model.Coupon, error)
-	PhighListing(ctx context.Context) ([]model.Coupon, error)
-	PlowListing(ctx context.Context, id string) ([]model.ProductList, error)
-	InAZListing(ctx context.Context, id string) ([]model.ProductList, error)
-	InZAListing(ctx context.Context, id string) ([]model.ProductList, error)
+	ActiveListing(ctx context.Context) ([]model.Coupon, error)
+
 	Deletecoupon(ctx context.Context, id string) error
+
+	///product listing
+	ProductListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	PlowListing(ctx context.Context, id string) ([]model.ProductListingUsers, error)
+	InAZListing(ctx context.Context, id string) ([]model.ProductListingUsers, error)
+	InZAListing(ctx context.Context, id string) ([]model.ProductListingUsers, error)
+	ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error)
+	PhighListing(ctx context.Context, id string) ([]model.ProductListingUsers, error)
+	CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
 }
 
 type service struct {
@@ -32,7 +39,31 @@ func NewService(repo Repository) Service {
 		repo: repo,
 	}
 }
+func (s *service) CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.CategoryListing(ctx, category)
+	}
+}
 
+func (s *service) ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.ListingSingle(ctx, id)
+	}
+}
+func (s *service) ProductListing(ctx context.Context) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.ProductListing(ctx)
+	}
+}
 func (s *service) Register(ctx context.Context, request model.AdminRegisterRequest) error {
 	var err error
 	if request.Name == "" || request.Email == "" || request.Password == "" || request.Phone == "" {
@@ -173,7 +204,17 @@ func (s *service) LatestListing(ctx context.Context) ([]model.Coupon, error) {
 		return s.repo.LatestListing(ctx)
 	}
 }
-func (s *service) PhighListing(ctx context.Context) ([]model.Coupon, error) {
+func (s *service) ActiveListing(ctx context.Context) ([]model.Coupon, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.ActiveListing(ctx)
+	}
+}
+
+// PhighListing
+func (s *service) PhighListing(ctx context.Context, id string) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -181,28 +222,28 @@ func (s *service) PhighListing(ctx context.Context) ([]model.Coupon, error) {
 		return s.repo.PhighListing(ctx)
 	}
 }
-func (s *service) PlowListing(ctx context.Context, id string) ([]model.ProductList, error) {
+func (s *service) PlowListing(ctx context.Context, id string) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.PlowListing(ctx, id)
+		return s.repo.PlowListing(ctx)
 	}
 }
-func (s *service) InAZListing(ctx context.Context, id string) ([]model.ProductList, error) {
+func (s *service) InAZListing(ctx context.Context, id string) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.InAZListing(ctx, id)
+		return s.repo.InAZListing(ctx)
 	}
 }
 
-func (s *service) InZAListing(ctx context.Context, id string) ([]model.ProductList, error) {
+func (s *service) InZAListing(ctx context.Context, id string) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		return s.repo.InZAListing(ctx, id)
+		return s.repo.InZAListing(ctx)
 	}
 }

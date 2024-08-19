@@ -45,10 +45,22 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listing", h.Listing)
 		applicantApi.GET("/Latestlisting", h.LatestListing)
 		applicantApi.GET("/ActiveListing", h.ActiveListing)
-		applicantApi.GET("/PlowListing/:id", h.PlowListing)
-		applicantApi.GET("/InAZListing/:id", h.InAZListing)
-		applicantApi.GET("/InZAListing/:id", h.InZAListing)
 
+		//list vendors
+
+		applicantApi.GET("/Vendorlisting", h.VendorListing)
+
+		//Product listing
+		applicantApi.GET("/Productlisting", h.ProductListing)
+
+		applicantApi.GET("/InAZListing", h.InAZListing)
+		applicantApi.GET("/InZAListing", h.InZAListing)
+		applicantApi.GET("/PhighListing", h.PhighListing)
+		applicantApi.GET("/PlowListing", h.PlowListing)
+		applicantApi.GET("/listingSingleProduct/:id", h.ListingSingle)
+		applicantApi.POST("/Categorylisting", h.CategoryListing)
+
+		//applicantApi.GET("/ProductActiveListing", h.ProductActiveListing)
 	}
 }
 
@@ -67,6 +79,11 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 	}
 	return c.JSON(code, resp)
 }
+func (h *Handler) VendorListing(c echo.Context) error {
+
+	return nil
+}
+
 func (h *Handler) Addcoupon(c echo.Context) error {
 	// Parse request body into VendorRegisterRequest
 	fmt.Println("this is in the handler AddProduct")
@@ -231,7 +248,7 @@ func (h *Handler) ActiveListing(c echo.Context) error {
 	fmt.Println("in activeeee")
 	ctx := c.Request().Context()
 
-	products, err := h.service.PhighListing(ctx)
+	products, err := h.service.ActiveListing(ctx)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
 	}
@@ -240,8 +257,18 @@ func (h *Handler) ActiveListing(c echo.Context) error {
 }
 func (h *Handler) PlowListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	id := ""
 	products, err := h.service.PlowListing(ctx, id)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) PhighListing(c echo.Context) error {
+	ctx := c.Request().Context()
+	id := ""
+	products, err := h.service.PhighListing(ctx, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
 	}
@@ -250,7 +277,7 @@ func (h *Handler) PlowListing(c echo.Context) error {
 }
 func (h *Handler) InAZListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	id := ""
 	products, err := h.service.InAZListing(ctx, id)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
@@ -260,8 +287,61 @@ func (h *Handler) InAZListing(c echo.Context) error {
 }
 func (h *Handler) InZAListing(c echo.Context) error {
 	ctx := c.Request().Context()
-	id := c.Param("id")
+	id := ""
 	products, err := h.service.InZAListing(ctx, id)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+
+// / Product listing
+// func (h *Handler) ProductActiveListing(c echo.Context) error {
+// 	fmt.Println("in activeeee")
+// 	ctx := c.Request().Context()
+
+//		products, err := h.service.ProductActiveListing(ctx)
+//		if err != nil {
+//			return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+//		}
+//		fmt.Println("this is the data ", products)
+//		return h.respondWithData(c, http.StatusOK, "success", products)
+//	}
+func (h *Handler) ProductListing(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	products, err := h.service.ProductListing(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) ListingSingle(c echo.Context) error {
+	ctx := c.Request().Context()
+	id := c.Param("id")
+	products, err := h.service.ListingSingle(ctx, id)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+
+func (h *Handler) CategoryListing(c echo.Context) error {
+	ctx := c.Request().Context()
+	type Cat struct {
+		Category string `json:"category"`
+	}
+	var request Cat
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	if request.Category == "" {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Enter a valid value"})
+	}
+	products, err := h.service.CategoryListing(ctx, request.Category)
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
 	}
