@@ -34,7 +34,8 @@ func InitializeEvent(conf config.Config) (*bootserver.ServerHttp, error) {
 	vendorHandler := vendor.NewHandler(vendorService, myService, vendorjwt)
 
 	adminRepository := admin.NewRepository(sqlDB)
-	adminService := admin.NewService(adminRepository)
+	myService2 := services.MyService{Config: conf}
+	adminService := admin.NewService(adminRepository, myService2)
 	// adminjwt := admin.adminjwt{Config: conf} // Corrected import path
 	adminjwt := admin.Adminjwt{Config: conf}
 	adminHandler := admin.NewHandler(adminService, myService, adminjwt)

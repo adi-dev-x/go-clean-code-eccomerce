@@ -59,6 +59,12 @@ type SendSalesReort struct {
 	PdfUrl    string
 	ExcelUrl  string
 }
+type SendSalesReortAdmin struct {
+	Data      []ListOrdersAdmin
+	FactsData Salesfact
+	PdfUrl    string
+	ExcelUrl  string
+}
 
 type ListOrdersVendor struct {
 	Name     string  `json:"name"`
@@ -73,11 +79,26 @@ type ListOrdersVendor struct {
 	ListDate string  `json:"checks"`
 	Oid      string  `json:"oid"`
 }
+type ListOrdersAdmin struct {
+	Name     string  `json:"name"`
+	Unit     int     `json:"unit"`
+	Status   string  `json:"status"`
+	Returned bool    `json:"returned"`
+	Amount   float64 `json:"amount"`
+	Pid      string  `json:"pid"`
+	Date     string  `json:"date"`
+	User     string  `json:"user"`
+	Add      string  `json:"user_ad"`
+	ListDate string  `json:"checks"`
+	Oid      string  `json:"oid"`
+	VName    string  `json:"vname"`
+}
 type SalesReport struct {
 	Type string `json:"type"`
 	Usid string
 	From string `json:"from"`
 	To   string `json:"to"`
+	Vid  string `json:"vid"`
 }
 type Salesfact struct {
 	Revenue       float64 `json:"revenue"`

@@ -61,6 +61,24 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.POST("/Categorylisting", h.CategoryListing)
 
 		//applicantApi.GET("/ProductActiveListing", h.ProductActiveListing)
+
+		///list orders
+		//of a particular vendor   Singlevendor
+		applicantApi.POST("/listAllOrdersSinglevendor", h.ListAllOrdersSinglevendor)
+		applicantApi.POST("/listReturnedOrdersSinglevendor", h.ListReturnedOrdersSinglevendor)
+		applicantApi.POST("/listFailedOrdersSinglevendor", h.ListFailedOrdersSinglevendor)
+		applicantApi.POST("/listCompletedOrdersSinglevendor", h.ListCompletedOrdersSinglevendor)
+		applicantApi.POST("/listPendingOrdersSinglevendor", h.ListPendingOrdersSinglevendor)
+		applicantApi.POST("/SalesReportSinglevendor", h.SalesReportSinglevendor)
+
+		//// ending particular vendor
+		applicantApi.GET("/listAllOrders", h.ListAllOrders)
+		applicantApi.GET("/listReturnedOrders", h.ListReturnedOrders)
+		applicantApi.GET("/listFailedOrders", h.ListFailedOrders)
+		applicantApi.GET("/listCompletedOrders", h.ListCompletedOrders)
+		applicantApi.GET("/listPendingOrders", h.ListPendingOrders)
+		applicantApi.POST("/SalesReport", h.SalesReport)
+
 	}
 }
 
@@ -83,6 +101,222 @@ func (h *Handler) VendorListing(c echo.Context) error {
 
 	return nil
 }
+
+// / orders
+func (h *Handler) SalesReport(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	var request model.SalesReport
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	ErrVal := request.Valid()
+	if len(ErrVal) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": ErrVal})
+	}
+
+	ctx := c.Request().Context()
+
+	orders, err := h.service.SalesReport(ctx, request)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListPendingOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	ctx := c.Request().Context()
+	orders, err := h.service.ListPendingOrders(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListCompletedOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	ctx := c.Request().Context()
+	orders, err := h.service.ListCompletedOrders(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListFailedOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	ctx := c.Request().Context()
+	orders, err := h.service.ListFailedOrders(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListReturnedOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	ctx := c.Request().Context()
+	orders, err := h.service.ListReturnedOrders(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListAllOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	ctx := c.Request().Context()
+	orders, err := h.service.ListAllOrders(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+
+// /////  Singlevendor listing orders of particular vendor  begining
+func (h *Handler) SalesReportSinglevendor(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	var request model.SalesReport
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	ErrVal := request.Valid()
+	if len(ErrVal) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": ErrVal})
+	}
+
+	ctx := c.Request().Context()
+	if request.Vid == "" {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": "Please enter Vendor id"})
+
+	}
+
+	orders, err := h.service.SalesReportSinglevendor(ctx, request.Vid, request)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+
+func (h *Handler) ListPendingOrdersSinglevendor(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+
+	type getId struct {
+		Id string `json:"v_id"`
+	}
+	var bb getId
+	if err := c.Bind(&bb); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parseerr": err.Error()})
+
+	}
+	username := bb.Id
+	ctx := c.Request().Context()
+	orders, err := h.service.ListPendingOrdersSinglevendor(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListCompletedOrdersSinglevendor(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	type getId struct {
+		Id string `json:"v_id"`
+	}
+	var bb getId
+	if err := c.Bind(&bb); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parseerr": err.Error()})
+
+	}
+	username := bb.Id
+	ctx := c.Request().Context()
+	orders, err := h.service.ListCompletedOrdersSinglevendor(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListFailedOrdersSinglevendor(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	type getId struct {
+		Id string `json:"v_id"`
+	}
+	var bb getId
+	if err := c.Bind(&bb); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parseerr": err.Error()})
+
+	}
+	username := bb.Id
+	ctx := c.Request().Context()
+	orders, err := h.service.ListFailedOrdersSinglevendor(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListReturnedOrdersSinglevendor(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	type getId struct {
+		Id string `json:"v_id"`
+	}
+	var bb getId
+	if err := c.Bind(&bb); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parseerr": err.Error()})
+
+	}
+	username := bb.Id
+	ctx := c.Request().Context()
+	orders, err := h.service.ListReturnedOrdersSinglevendor(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListAllOrdersSinglevendor(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	type getId struct {
+		Id string `json:"v_id"`
+	}
+	var bb getId
+	if err := c.Bind(&bb); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parseerr": err.Error()})
+
+	}
+	username := bb.Id
+	ctx := c.Request().Context()
+	orders, err := h.service.ListAllOrdersSinglevendor(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+
+///////////// listing orders of particular vendor ending
 
 func (h *Handler) Addcoupon(c echo.Context) error {
 	// Parse request body into VendorRegisterRequest

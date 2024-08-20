@@ -3,7 +3,9 @@ package admin
 import (
 	"context"
 	"fmt"
+	services "myproject/pkg/client"
 	"myproject/pkg/model"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -28,17 +30,316 @@ type Service interface {
 	ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error)
 	PhighListing(ctx context.Context, id string) ([]model.ProductListingUsers, error)
 	CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+
+	///orders
+	/// Singlevendor
+	SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReort, error)
+	ListAllOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListReturnedOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListFailedOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListCompletedOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+	ListPendingOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
+
+	// all orders
+	ListFailedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error)
+	ListAllOrders(ctx context.Context) ([]model.ListOrdersAdmin, error)
+	ListReturnedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error)
+	ListCompletedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error)
+	ListPendingOrders(ctx context.Context) ([]model.ListOrdersAdmin, error)
+	SalesReport(ctx context.Context, request model.SalesReport) (model.SendSalesReortAdmin, error)
 }
 
 type service struct {
-	repo Repository
+	repo     Repository
+	services services.Services
 }
 
-func NewService(repo Repository) Service {
+func NewService(repo Repository, services services.Services) Service {
 	return &service{
-		repo: repo,
+		repo:     repo,
+		services: services,
 	}
 }
+
+// //All orders
+func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (model.SendSalesReortAdmin, error) {
+
+	// Parse dates
+	const dateFormat = "2006-01-02"
+	var startDate, endDate time.Time
+	var err error
+	var orders []model.ListOrdersAdmin
+	if request.Type == "Custom" {
+		startDate, err = time.Parse(dateFormat, request.From)
+		if err != nil {
+			return model.SendSalesReortAdmin{}, fmt.Errorf("invalid From date format: %w", err)
+		}
+		endDate, err = time.Parse(dateFormat, request.To)
+		if err != nil {
+			return model.SendSalesReortAdmin{}, fmt.Errorf("invalid To date format: %w", err)
+		}
+		orders, err = s.repo.SalesReportOrdersCustom(ctx, startDate, endDate)
+		fmt.Println("in data!!", orders)
+		if err != nil {
+			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving data")
+		}
+	}
+	if request.Type == "Yearly" {
+		orders, err = s.repo.SalesReportOrdersYearly(ctx)
+		if err != nil {
+			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving yearly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Monthly" {
+		orders, err = s.repo.SalesReportOrdersMonthly(ctx)
+		if err != nil {
+			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving monthly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Weekly" {
+		orders, err = s.repo.SalesReportOrdersWeekly(ctx)
+		if err != nil {
+			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving weekly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Daily" {
+		orders, err = s.repo.SalesReportOrdersDaily(ctx)
+		if err != nil {
+			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving daily data: %w", err)
+		}
+
+	}
+	fmt.Println("this is the dattaaaa!!!!!", orders)
+	// Call repository function
+	salesFacts, err := s.repo.GetSalesFactByDate(ctx, request.Type, startDate, endDate)
+	if err != nil {
+		return model.SendSalesReortAdmin{}, fmt.Errorf("failed to get sales facts: %w", err)
+	}
+	fmt.Println("valueeee in salesFact!!!", salesFacts)
+	if salesFacts == nil {
+		return model.SendSalesReortAdmin{}, nil
+	}
+	slFact := salesFacts[0]
+	//slFact.TotalSales = slFact.TotalSales * 0.02
+	name, err := s.services.GenerateDailySalesReportExcelAdmin(orders, slFact, request.Type, "")
+	fmt.Println(name, "@@@@@@@", err)
+	excelfurl := "http://localhost:8081/" + name
+	pname, err := s.services.GenerateDailySalesReportPDFAdmin(orders, slFact, request.Type, "AdminPDF")
+	fmt.Println(pname, "@@@@@@@", err)
+	pdffurl := "http://localhost:8081/" + pname
+
+	fmt.Println(excelfurl, "  --  ", pdffurl)
+	var data model.SendSalesReortAdmin
+	data.Data = orders
+	data.FactsData = slFact
+	data.ExcelUrl = excelfurl
+	data.PdfUrl = pdffurl
+
+	return data, nil
+
+}
+func (s *service) ListPendingOrders(ctx context.Context) ([]model.ListOrdersAdmin, error) {
+
+	fmt.Println("inside the ListAllOrders ")
+
+	orders, err := s.repo.ListPendingOrders(ctx)
+	if err != nil {
+		return []model.ListOrdersAdmin{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListCompletedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error) {
+
+	fmt.Println("inside the ListAllOrders ")
+
+	orders, err := s.repo.ListCompletedOrders(ctx)
+	if err != nil {
+		return []model.ListOrdersAdmin{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListFailedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error) {
+
+	fmt.Println("inside the ListAllOrders ")
+
+	orders, err := s.repo.ListFailedOrders(ctx)
+	if err != nil {
+		return []model.ListOrdersAdmin{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListReturnedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error) {
+
+	fmt.Println("inside the ListAllOrders ")
+
+	orders, err := s.repo.ListReturnedOrders(ctx)
+	if err != nil {
+		return []model.ListOrdersAdmin{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListAllOrders(ctx context.Context) ([]model.ListOrdersAdmin, error) {
+
+	fmt.Println("inside the ListAllOrders ")
+
+	orders, err := s.repo.ListAllOrders(ctx)
+	if err != nil {
+		return []model.ListOrdersAdmin{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+
+// //list Singlevendor begining
+
+func (s *service) SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReort, error) {
+
+	// Parse dates
+	const dateFormat = "2006-01-02"
+	var startDate, endDate time.Time
+	var err error
+	var orders []model.ListOrdersVendor
+	if request.Type == "Custom" {
+		startDate, err = time.Parse(dateFormat, request.From)
+		if err != nil {
+			return model.SendSalesReort{}, fmt.Errorf("invalid From date format: %w", err)
+		}
+		endDate, err = time.Parse(dateFormat, request.To)
+		if err != nil {
+			return model.SendSalesReort{}, fmt.Errorf("invalid To date format: %w", err)
+		}
+		orders, err = s.repo.SalesReportOrdersCustomSinglevendor(ctx, startDate, endDate, id)
+		fmt.Println("in data!!", orders)
+		if err != nil {
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving data")
+		}
+	}
+	if request.Type == "Yearly" {
+		orders, err = s.repo.SalesReportOrdersYearlySinglevendor(ctx, id)
+		if err != nil {
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving yearly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Monthly" {
+		orders, err = s.repo.SalesReportOrdersMonthlySinglevendor(ctx, id)
+		if err != nil {
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving monthly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Weekly" {
+		orders, err = s.repo.SalesReportOrdersWeeklySinglevendor(ctx, id)
+		if err != nil {
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving weekly data: %w", err)
+		}
+
+	}
+
+	if request.Type == "Daily" {
+		orders, err = s.repo.SalesReportOrdersDailySinglevendor(ctx, id)
+		if err != nil {
+			return model.SendSalesReort{}, fmt.Errorf("error in receiving daily data: %w", err)
+		}
+
+	}
+	fmt.Println("this is the dattaaaa!!!!!", orders)
+	// Call repository function
+	salesFacts, err := s.repo.GetSalesFactByDateSinglevendor(ctx, request.Type, startDate, endDate, id)
+	if err != nil {
+		return model.SendSalesReort{}, fmt.Errorf("failed to get sales facts: %w", err)
+	}
+	fmt.Println("valueeee in salesFact!!!", salesFacts)
+	if salesFacts == nil {
+		return model.SendSalesReort{}, nil
+	}
+	slFact := salesFacts[0]
+	name, err := s.services.GenerateDailySalesReportExcel(orders, slFact, request.Type, "Admin_EXCEL")
+	fmt.Println(name, "@@@@@@@", err)
+	excelfurl := "http://localhost:8081/" + name
+	pname, err := s.services.GenerateDailySalesReportPDF(orders, slFact, request.Type, "Admin_PDF")
+	fmt.Println(pname, "@@@@@@@", err)
+	pdffurl := "http://localhost:8081/" + pname
+
+	fmt.Println(excelfurl, "  --  ", pdffurl)
+	var data model.SendSalesReort
+	data.Data = orders
+	data.FactsData = slFact
+	data.ExcelUrl = excelfurl
+	data.PdfUrl = pdffurl
+
+	return data, nil
+
+}
+func (s *service) ListPendingOrdersSinglevendor(ctx context.Context, id string) ([]model.ListOrdersVendor, error) {
+
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListPendingOrdersSinglevendor(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListFailedOrdersSinglevendor(ctx context.Context, id string) ([]model.ListOrdersVendor, error) {
+
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListFailedOrdersSinglevendor(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListCompletedOrdersSinglevendor(ctx context.Context, id string) ([]model.ListOrdersVendor, error) {
+
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListCompletedOrdersSinglevendor(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListReturnedOrdersSinglevendor(ctx context.Context, id string) ([]model.ListOrdersVendor, error) {
+
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListReturnedOrdersSinglevendor(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+func (s *service) ListAllOrdersSinglevendor(ctx context.Context, id string) ([]model.ListOrdersVendor, error) {
+
+	fmt.Println("inside the ListAllOrders ", id)
+
+	orders, err := s.repo.ListAllOrdersSinglevendor(ctx, id)
+	if err != nil {
+		return []model.ListOrdersVendor{}, fmt.Errorf("this is the error for listing all orders", err)
+	}
+
+	return orders, nil
+}
+
+// ///end Singlevendor ending
 func (s *service) CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
