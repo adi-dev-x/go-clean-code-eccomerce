@@ -60,7 +60,7 @@ type Service interface {
 	ListTypeTransactions(ctx context.Context, username string, ty string) ([]model.UserTransactions, error)
 
 	/// list main orders
-
+	ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error)
 }
 type service struct {
 	repo     Repository
@@ -73,6 +73,12 @@ func NewService(repo Repository, services services.Services) Service {
 		repo:     repo,
 		services: services,
 	}
+}
+func (s *service) ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error) {
+
+	id := s.repo.Getid(ctx, username)
+
+	return []model.ListingMainOrders{}, nil
 }
 
 // /transactions

@@ -93,7 +93,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listDebitTransactions", h.ListDebitTransactions)
 
 		///// list main orders
-		//applicantApi.GET("/listAllOrders", h.ListAllOrders)
+		applicantApi.GET("/listMainOrders", h.ListMainOrders)
 
 	}
 
@@ -132,6 +132,20 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 		"data": data,
 	}
 	return c.JSON(code, resp)
+}
+func (h *Handler) ListMainOrders(c echo.Context) error {
+	fmt.Println("in activeeee")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+
+	products, err := h.service.ListMainOrders(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
 }
 
 // / list all transactions

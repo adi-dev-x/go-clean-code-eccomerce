@@ -132,3 +132,6 @@ func (s *SalesReport) Valid() (err url.Values) {
 
 	return err
 }
+
+type ListingMainOrders struct {
+}
