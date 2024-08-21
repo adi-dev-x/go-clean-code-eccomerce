@@ -79,6 +79,8 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listPendingOrders", h.ListPendingOrders)
 		applicantApi.POST("/SalesReport", h.SalesReport)
 
+		////main order
+		applicantApi.GET("/listMainOrders", h.ListMainOrders)
 	}
 }
 
@@ -103,6 +105,18 @@ func (h *Handler) VendorListing(c echo.Context) error {
 }
 
 // / orders
+func (h *Handler) ListMainOrders(c echo.Context) error {
+	fmt.Println("in activeeee")
+
+	ctx := c.Request().Context()
+
+	products, err := h.service.ListMainOrders(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
 func (h *Handler) SalesReport(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
 

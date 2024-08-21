@@ -57,6 +57,8 @@ type Repository interface {
 	SalesReportOrdersMonthlySinglevendor(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error)
 	SalesReportOrdersYearlySinglevendor(ctx context.Context, vendorID string) ([]model.ListOrdersVendor, error)
 	SalesReportOrdersCustomSinglevendor(ctx context.Context, startDate, endDate time.Time, vendorID string) ([]model.ListOrdersVendor, error)
+
+	PrintingUserMainOrder(ctx context.Context) ([]model.ListingMainOrders, error)
 }
 
 type repository struct {
@@ -67,6 +69,42 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) PrintingUserMainOrder(ctx context.Context) ([]model.ListingMainOrders, error) {
+	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount, 
+	                 u.firstname || ' ' || u.lastname AS user, 
+	                 COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || 
+	                 COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || 
+	                 COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || 
+	                 COALESCE(a.country, '') AS user_ad, 
+	                 COALESCE(DATE(mo.delivery_date)::text, '') AS delivery_date 
+			  FROM orders mo
+			  JOIN users u ON mo.user_id = u.id 
+			  JOIN address a ON mo.address_id = a.address_id
+			  `
+	var orders []model.ListingMainOrders
+
+	rows, err := r.sql.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("can't execute query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListingMainOrders
+		err := rows.Scan(&order.OR_id, &order.Delivery_Stat, &order.D_Type, &order.O_status, &order.Amount,
+			&order.User, &order.UserAddress, &order.Delivery_date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return orders, nil
 }
 
 // // list orders

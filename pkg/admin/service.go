@@ -47,6 +47,8 @@ type Service interface {
 	ListCompletedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error)
 	ListPendingOrders(ctx context.Context) ([]model.ListOrdersAdmin, error)
 	SalesReport(ctx context.Context, request model.SalesReport) (model.SendSalesReortAdmin, error)
+
+	ListMainOrders(ctx context.Context) ([]model.ListingMainOrders, error)
 }
 
 type service struct {
@@ -62,6 +64,15 @@ func NewService(repo Repository, services services.Services) Service {
 }
 
 // //All orders
+func (s *service) ListMainOrders(ctx context.Context) ([]model.ListingMainOrders, error) {
+
+	orders, err := s.repo.PrintingUserMainOrder(ctx)
+	if err != nil {
+		return []model.ListingMainOrders{}, fmt.Errorf("error in retriving data")
+	}
+	return orders, nil
+
+}
 func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (model.SendSalesReortAdmin, error) {
 
 	// Parse dates

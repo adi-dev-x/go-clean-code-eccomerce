@@ -134,4 +134,12 @@ func (s *SalesReport) Valid() (err url.Values) {
 }
 
 type ListingMainOrders struct {
+	OR_id         string  `json:"id"`
+	Delivery_Stat bool    `json:"delivered"`
+	D_Type        string  `json:"payment_method"`
+	O_status      string  `json:"status"`
+	Amount        float64 `json:"payable_amount"`
+	User          string  `json:"user"`
+	UserAddress   string  `json:"user_address"`
+	Delivery_date string  `json:"delivery_date"`
 }

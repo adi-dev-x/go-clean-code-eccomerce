@@ -87,6 +87,8 @@ type Repository interface {
 	ListAllTransactions(ctx context.Context, id string) ([]model.UserTransactions, error)
 
 	ListTypeTransactions(ctx context.Context, id string, ty string) ([]model.UserTransactions, error)
+
+	PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingMainOrders, error)
 }
 
 type repository struct {
@@ -98,6 +100,43 @@ func NewRepository(sqlDB *sql.DB) Repository {
 		sql: sqlDB,
 	}
 }
+func (r *repository) PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingMainOrders, error) {
+	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount, 
+	                 u.firstname || ' ' || u.lastname AS user, 
+	                 COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || 
+	                 COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || 
+	                 COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || 
+	                 COALESCE(a.country, '') AS user_ad, 
+	                 COALESCE(DATE(mo.delivery_date)::text, '') AS delivery_date 
+			  FROM orders mo
+			  JOIN users u ON mo.user_id = u.id 
+			  JOIN address a ON mo.address_id = a.address_id
+			  WHERE u.id=$1`
+	var orders []model.ListingMainOrders
+
+	rows, err := r.sql.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("can't execute query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.ListingMainOrders
+		err := rows.Scan(&order.OR_id, &order.Delivery_Stat, &order.D_Type, &order.O_status, &order.Amount,
+			&order.User, &order.UserAddress, &order.Delivery_date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return orders, nil
+}
+
 func (r *repository) ItemExistsInCart(ctx context.Context, userID string, productID string) (bool, error) {
 	fmt.Println("check exist in ,", userID, "pid !!", productID)
 	query := `

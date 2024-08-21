@@ -77,8 +77,12 @@ func NewService(repo Repository, services services.Services) Service {
 func (s *service) ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error) {
 
 	id := s.repo.Getid(ctx, username)
+	orders, err := s.repo.PrintingUserMainOrder(ctx, id)
+	if err != nil {
+		return []model.ListingMainOrders{}, fmt.Errorf("error in retriving data")
+	}
+	return orders, nil
 
-	return []model.ListingMainOrders{}, nil
 }
 
 // /transactions
