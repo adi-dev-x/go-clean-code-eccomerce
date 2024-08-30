@@ -28,7 +28,7 @@ type ListAllOrdersCheck struct {
 	Name     string  `json:"name"`
 	Unit     int     `json:"unit"`
 	Status   string  `json:"status"`
-	Returned bool    `json:"returned"`
+	Returned string  `json:"re_cl"`
 	Amount   float64 `json:"amount"`
 	Pid      string  `json:"pid"`
 	Date     string  `json:"date"`
@@ -36,12 +36,34 @@ type ListAllOrdersCheck struct {
 	Vid      string  `json:"vid"`
 	Usmail   string  `json:"usmail"`
 	Moid     string  `json:"mid"`
+	Delivery string  `json:"delivered"`
 }
 
 type ReturnOrderPost struct {
-	Oid string `json:"oid"`
+	Oid      string `json:"oid"`
+	MoReturn bool
 }
 
+type ReturnOrderPostForUser struct {
+	Oid      string `json:"oid"`
+	MoReturn bool
+	Type     string `json:"type"`
+}
+
+func (r *ReturnOrderPostForUser) Valid() (err url.Values) {
+	err = url.Values{}
+	if r.Oid == "" {
+		err.Add("item id ", "id is not present")
+
+	}
+	if !(r.Type == "Returned" || r.Type == "Cancelled") {
+		err.Add("Type  ", "Give Returned or Cancelled")
+
+	}
+
+	return err
+
+}
 func (r *ReturnOrderPost) Valid() (err url.Values) {
 	err = url.Values{}
 	if r.Oid == "" {

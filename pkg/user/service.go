@@ -54,13 +54,14 @@ type Service interface {
 	ListFailedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ListCompletedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
 	ListPendingOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
-	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
+	ReturnItem(ctx context.Context, request model.ReturnOrderPostForUser, username string) error
 
 	ListAllTransactions(ctx context.Context, username string) ([]model.UserTransactions, error)
 	ListTypeTransactions(ctx context.Context, username string, ty string) ([]model.UserTransactions, error)
 
 	/// list main orders
 	ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error)
+	CancelMainOrders(ctx context.Context, username string, orderUid string) error
 }
 type service struct {
 	repo     Repository
@@ -73,6 +74,19 @@ func NewService(repo Repository, services services.Services) Service {
 		repo:     repo,
 		services: services,
 	}
+}
+func (s *service) CancelMainOrders(ctx context.Context, username string, orderUid string) error {
+
+	id := s.repo.Getid(ctx, username)
+	/// check if order id is valid
+
+	orders, err := s.repo.PrintingUserSingleMainOrder(ctx, id, orderUid)
+	fmt.Println(orders)
+	if err != nil {
+		return fmt.Errorf("error in retriving data")
+	}
+	return nil
+
 }
 func (s *service) ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error) {
 
@@ -112,7 +126,7 @@ func (s *service) ListTypeTransactions(ctx context.Context, username string, ty 
 }
 
 // ///
-func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error {
+func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostForUser, username string) error {
 	id := s.repo.Getid(ctx, username)
 	fmt.Println("inside the ReturnItem ", id)
 	p, err := s.repo.GetSingleItem(ctx, id, request.Oid)
@@ -121,15 +135,28 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 		return fmt.Errorf("entered is wrong id", err)
 	}
 	fmt.Println("this is the single order ", p)
-	if p.Returned {
+	switch p.Returned {
+	case "Returned":
 		return fmt.Errorf("this item is already returned")
 
+	case "Cancelled":
+		return fmt.Errorf("this item is payment Cancelled")
+
 	}
 
-	if p.Status == "Failed" {
+	if p.Delivery == "Completed" && request.Type == "Cancelled" {
+		return fmt.Errorf("can not cancel returned item")
+	}
+
+	switch p.Status {
+	case "Failed":
 		return fmt.Errorf("this item is payment failed")
 
+	case "Cancelled":
+		return fmt.Errorf("this item is payment Cancelled")
+
 	}
+
 	var w sync.WaitGroup
 
 	Err := make(chan error, 1)
@@ -151,7 +178,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	}()
 	go func() {
 		defer w.Done()
-		err := s.repo.UpdateOiStatus(ctx, request.Oid)
+		err := s.repo.UpdateOiStatus(ctx, request.Oid, request.Type)
 		Err3 <- err
 	}()
 	go func() {

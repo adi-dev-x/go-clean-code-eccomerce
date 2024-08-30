@@ -5,6 +5,7 @@ import (
 	"fmt"
 	services "myproject/pkg/client"
 	"myproject/pkg/model"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -49,6 +50,8 @@ type Service interface {
 	SalesReport(ctx context.Context, request model.SalesReport) (model.SendSalesReortAdmin, error)
 
 	ListMainOrders(ctx context.Context) ([]model.ListingMainOrders, error)
+
+	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
 }
 
 type service struct {
@@ -61,6 +64,115 @@ func NewService(repo Repository, services services.Services) Service {
 		repo:     repo,
 		services: services,
 	}
+}
+func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error {
+
+	p, err := s.repo.GetSingleItem(ctx, request.Oid)
+	if err != nil {
+		return fmt.Errorf("entered is wrong id", err)
+	}
+	fmt.Println("this is the single order ", p)
+	switch p.Returned {
+	case "Returned":
+		return fmt.Errorf("this item is already returned")
+
+	case "Cancelled":
+		return fmt.Errorf("this item is payment Cancelled")
+
+	}
+
+	switch p.Status {
+	case "Failed":
+		return fmt.Errorf("this item is payment failed")
+
+	case "Cancelled":
+		return fmt.Errorf("this item is payment Cancelled")
+
+	}
+	var w sync.WaitGroup
+
+	VErr0 := make(chan error, 1)
+	VErr := make(chan error, 1)
+	VErr2 := make(chan error, 1)
+	VErr3 := make(chan error, 1)
+	VErr4 := make(chan error, 1)
+	w.Add(5)
+	go func() {
+		defer w.Done()
+		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
+		VErr0 <- err
+	}()
+	go func() {
+		defer w.Done()
+		err := s.services.SendOrderReturnConfirmationEmailVendor(p.Name, p.Amount, p.Unit, username)
+		VErr <- err
+	}()
+	go func() {
+		defer w.Done()
+		err := s.repo.IncreaseStock(ctx, p.Pid, p.Unit)
+		VErr2 <- err
+	}()
+	go func() {
+		defer w.Done()
+		err := s.repo.UpdateOiStatus(ctx, request.Oid, "Cancelled")
+		VErr3 <- err
+	}()
+	go func() {
+		defer w.Done()
+		var err error
+		var wallet_id string
+		if p.Status == "Completed" {
+			fmt.Println("in 1st if")
+			// value := []interface{}{p.Amount, id, "Credit"}
+			wallet_id, err = s.repo.CreditWallet(ctx, p.Usid, p.Amount)
+			if wallet_id != "" {
+				value := []interface{}{p.Amount, wallet_id, "Credit", p.Usid}
+				er := s.repo.UpdateWalletTransaction(ctx, value)
+				if er != nil {
+					fmt.Println("there is erorrrr in wallet transaction")
+				}
+
+				fmt.Println("this is workingggg ist")
+			}
+		} else {
+			fmt.Println("in 1st else")
+			wallet_id = ""
+			err = nil
+		}
+		VErr4 <- err
+
+	}()
+	go func() {
+		w.Wait()
+		close(VErr0)
+		close(VErr)
+		close(VErr2)
+		close(VErr3)
+		close(VErr4)
+	}()
+	if err := <-VErr0; err != nil {
+		return fmt.Errorf("failed to send order  return  email: %w", err)
+	}
+	if err := <-VErr; err != nil {
+		return fmt.Errorf("failed to send order  return  email: %w", err)
+	}
+	if err := <-VErr2; err != nil {
+		return fmt.Errorf("failed to update unit: %w", err)
+	}
+	if err := <-VErr3; err != nil {
+		return fmt.Errorf("failed to update to redund status: %w", err)
+	}
+	if err := <-VErr4; err != nil {
+		return fmt.Errorf("failed to update to redund status: %w", err)
+	}
+	// er := s.repo.ChangeOrderStatus(ctx, p.Moid)
+	// fmt.Println(er)
+	// if errM != nil {
+	// 	return fmt.Errorf("error in updating ")
+	// }
+
+	return nil
+
 }
 
 // //All orders

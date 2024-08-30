@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"time"
 
 	"myproject/pkg/model"
@@ -59,6 +60,16 @@ type Repository interface {
 	SalesReportOrdersCustomSinglevendor(ctx context.Context, startDate, endDate time.Time, vendorID string) ([]model.ListOrdersVendor, error)
 
 	PrintingUserMainOrder(ctx context.Context) ([]model.ListingMainOrders, error)
+
+	GetSingleItem(ctx context.Context, oid string) (model.ListAllOrdersCheck, error)
+
+	IncreaseStock(ctx context.Context, id string, unit int) error
+
+	UpdateOiStatus(ctx context.Context, id, ty string) error
+
+	CreditWallet(ctx context.Context, id string, amt float64) (string, error)
+
+	UpdateWalletTransaction(ctx context.Context, value interface{}) error
 }
 
 type repository struct {
@@ -69,6 +80,109 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) UpdateWalletTransaction(ctx context.Context, value interface{}) error {
+	fmt.Println("changing innnnn   !!!!!! UpdateWalletTransaction")
+	values, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid input")
+	}
+	Amt := values[0]
+	id := values[1]
+	Type := values[2]
+	usid := values[3]
+	fmt.Println("this is the UpdateWalletTransaction in repo!!@@@@@", reflect.TypeOf(Amt), "____", Amt, "!!", id, "##", Type)
+	query := `
+	INSERT INTO wallet_transactions (
+		wallet_id,
+		amount,
+		transaction_type,
+		user_id,
+		created_at
+		
+	) VALUES (
+		$1, $2, $3,$4, CURRENT_TIMESTAMP
+	) RETURNING id;
+`
+	var tid string
+	fmt.Println("this is the id ", tid, "user_id,", usid)
+
+	err := r.sql.QueryRowContext(ctx, query, id, Amt, Type, usid).Scan(&tid)
+	if err != nil {
+		return fmt.Errorf("there is error in insertion")
+	}
+
+	return nil
+
+}
+func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (string, error) {
+	query := `
+	UPDATE wallet
+	SET balance = balance + $1
+	WHERE user_id = $2
+	RETURNING id;
+`
+	var Wallet_id string
+	err := r.sql.QueryRowContext(ctx, query, amt, id).Scan(&Wallet_id)
+	fmt.Println("hey adiii CreditWallet????!!!!!", Wallet_id, "wallet_id !", "id!", id)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return Wallet_id, nil
+}
+func (r *repository) UpdateOiStatus(ctx context.Context, id string, ty string) error {
+
+	query := `
+	UPDATE order_items
+	SET returned = true,
+	re_cl=$1
+	WHERE id = $2
+	RETURNING id;
+`
+	var Oi_id string
+	err := r.sql.QueryRowContext(ctx, query, ty, id).Scan(&Oi_id)
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return nil
+}
+func (r *repository) IncreaseStock(ctx context.Context, id string, unit int) error {
+	fmt.Println("this is in the IncreaseStock!!", id, "unitss ", unit)
+	query := `
+	UPDATE product_models
+	SET units = units + $1
+	WHERE id = $2
+	RETURNING id;
+`
+	var Product_id string
+	err := r.sql.QueryRowContext(ctx, query, unit, id).Scan(&Product_id)
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return nil
+
+}
+func (r *repository) GetSingleItem(ctx context.Context, oid string) (model.ListAllOrdersCheck, error) {
+	var order model.ListAllOrdersCheck
+
+	query := `SELECT p.name,  oi.quantity,   mo.status, oi.returned, 
+    oi.price,oi.product_id AS pid,DATE(oi.created_at) AS date,mo.user_id ,v.id AS vid,u.email AS usmail,mo.id AS mid
+     FROM order_items oi 
+    JOIN  product_models p ON oi.product_id = p.id 
+    JOIN  orders mo ON oi.order_id = mo.id 
+    JOIN  vendor v ON p.vendor_id = v.id 
+	JOIN  users  u ON oi.user_id=u.id
+    WHERE  oi.id = $2;
+  
+`
+	err := r.sql.QueryRowContext(ctx, query, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid, &order.Vid, &order.Usmail, &order.Moid)
+	if err != nil {
+		return model.ListAllOrdersCheck{}, fmt.Errorf("error in exequting query in  GetSingleItem")
+	}
+	return order, nil
 }
 func (r *repository) PrintingUserMainOrder(ctx context.Context) ([]model.ListingMainOrders, error) {
 	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount, 

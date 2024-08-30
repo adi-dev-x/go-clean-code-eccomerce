@@ -56,3 +56,10 @@ func GetRedis(key string) (string, error) {
 	}
 	return jsonData, nil
 }
+func DeleteRedis(key string) error {
+	fmt.Println("Deleting key from Redis...")
+	if err := Client.Del(ctx, key).Err(); err != nil {
+		return err
+	}
+	return nil
+}

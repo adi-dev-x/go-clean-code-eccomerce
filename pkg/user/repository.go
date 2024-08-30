@@ -74,7 +74,7 @@ type Repository interface {
 	ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
 	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error)
 	IncreaseStock(ctx context.Context, id string, unit int) error
-	UpdateOiStatus(ctx context.Context, id string) error
+	UpdateOiStatus(ctx context.Context, id string, typ string) error
 	////
 	CheckCouponExist(ctx context.Context, couponID string, userID string) (bool, error)
 	///wallet
@@ -89,6 +89,8 @@ type Repository interface {
 	ListTypeTransactions(ctx context.Context, id string, ty string) ([]model.UserTransactions, error)
 
 	PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingMainOrders, error)
+	//PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) (model.ListingMainOrders, error)
+	PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPost, error)
 }
 
 type repository struct {
@@ -100,6 +102,69 @@ func NewRepository(sqlDB *sql.DB) Repository {
 		sql: sqlDB,
 	}
 }
+
+// func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) (model.ListingMainOrders, error) {
+// 	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount,
+// 	                 u.firstname || ' ' || u.lastname AS user,
+// 	                 COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' ||
+// 	                 COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' ||
+// 	                 COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' ||
+// 	                 COALESCE(a.country, '') AS user_ad,
+// 	                 COALESCE(DATE(mo.delivery_date)::text, '') AS delivery_date
+// 			  FROM orders mo
+// 			  JOIN users u ON mo.user_id = u.id
+// 			  JOIN address a ON mo.address_id = a.address_id
+// 			  WHERE u.id=$1 AND mo.uuid=$2`
+// 	var order model.ListingMainOrders
+
+// 	err := r.sql.QueryRowContext(ctx, query, userID, orderUid).Scan(&order.OR_id, &order.Delivery_Stat, &order.D_Type, &order.O_status, &order.Amount,
+// 		&order.User, &order.UserAddress, &order.Delivery_date)
+// 	if err != nil {
+// 		return model.ListingMainOrders{}, fmt.Errorf("can't execute query: %w", err)
+// 	}
+
+// 	return order, nil
+// }
+
+func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPost, error) {
+	query := `
+		SELECT oi.id AS oid
+		FROM orders mo 
+		JOIN order_items oi ON mo.id = oi.order_id 
+		WHERE mo.uuid = $1 AND mo.user_id = $2
+	`
+
+	fmt.Println("Executing PrintingUserSingleMainOrder with UserID:", userID, "OrderUID:", orderUid)
+
+	// Define a slice to hold the order item IDs (which are strings)
+	var orderItemIDs []model.ReturnOrderPost
+
+	// Query the database
+	rows, err := r.sql.QueryContext(ctx, query, orderUid, userID)
+	if err != nil {
+		return nil, fmt.Errorf("can't execute query: %w", err)
+	}
+	defer rows.Close()
+	fmt.Println(" rooowsss  ", rows)
+	// Iterate over the result rows
+	for rows.Next() {
+		var orderItemID model.ReturnOrderPost
+		if err := rows.Scan(&orderItemID.Oid); err != nil {
+			fmt.Println("errr in thiss")
+			return nil, fmt.Errorf("can't scan result: %w", err)
+		}
+		orderItemID.MoReturn = true
+		orderItemIDs = append(orderItemIDs, orderItemID)
+	}
+
+	// Check for any errors after iterating through the result rows
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return orderItemIDs, nil
+}
+
 func (r *repository) PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingMainOrders, error) {
 	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount, 
 	                 u.firstname || ' ' || u.lastname AS user, 
@@ -220,16 +285,17 @@ func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (
 
 	return Wallet_id, nil
 }
-func (r *repository) UpdateOiStatus(ctx context.Context, id string) error {
+func (r *repository) UpdateOiStatus(ctx context.Context, id string, ty string) error {
 
 	query := `
 	UPDATE order_items
-	SET returned = true
-	WHERE id = $1
+	SET returned = true,
+	re_cl=$1
+	WHERE id = $2
 	RETURNING id;
 `
 	var Oi_id string
-	err := r.sql.QueryRowContext(ctx, query, id).Scan(&Oi_id)
+	err := r.sql.QueryRowContext(ctx, query, ty, id).Scan(&Oi_id)
 	if err != nil {
 		return fmt.Errorf("failed to execute update query: %w", err)
 	}
@@ -256,13 +322,13 @@ func (r *repository) IncreaseStock(ctx context.Context, id string, unit int) err
 func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error) {
 	var order model.ListAllOrdersCheck
 
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id AS pid, DATE(oi.created_at) AS date,mo.user_id FROM order_items oi 
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id AS pid, DATE(oi.created_at) AS date,mo.user_id,oi.delivered FROM order_items oi 
    JOIN product_models p ON oi.product_id = p.id 
    JOIN orders mo ON oi.order_id = mo.id 
    where oi.user_id=$1 AND oi.id=$2;
    
 `
-	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid)
+	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid, &order.Delivery)
 	if err != nil {
 		return model.ListAllOrdersCheck{}, fmt.Errorf("error in exequting query in  GetSingleItem")
 	}

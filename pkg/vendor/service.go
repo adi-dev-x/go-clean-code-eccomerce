@@ -114,18 +114,21 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 		return fmt.Errorf("entered is wrong id", err)
 	}
 	fmt.Println("this is the single order ", p)
-	if p.Returned {
+	switch p.Returned {
+	case "Returned":
 		return fmt.Errorf("this item is already returned")
 
+	case "Cancelled":
+		return fmt.Errorf("this item is payment Cancelled")
+
 	}
 
-	if p.Status == "Failed" {
+	switch p.Status {
+	case "Failed":
 		return fmt.Errorf("this item is payment failed")
 
-	}
-
-	if p.Status == "Cancelled" {
-		return fmt.Errorf("this order is Cancelled")
+	case "Cancelled":
+		return fmt.Errorf("this item is payment Cancelled")
 
 	}
 	var w sync.WaitGroup
@@ -153,7 +156,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	}()
 	go func() {
 		defer w.Done()
-		err := s.repo.UpdateOiStatus(ctx, request.Oid)
+		err := s.repo.UpdateOiStatus(ctx, request.Oid, "Cancelled")
 		VErr3 <- err
 	}()
 	go func() {
@@ -204,8 +207,8 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 	if err := <-VErr4; err != nil {
 		return fmt.Errorf("failed to update to redund status: %w", err)
 	}
-	er := s.repo.ChangeOrderStatus(ctx, p.Moid)
-	fmt.Println(er)
+	// er := s.repo.ChangeOrderStatus(ctx, p.Moid)
+	// fmt.Println(er)
 	// if errM != nil {
 	// 	return fmt.Errorf("error in updating ")
 	// }

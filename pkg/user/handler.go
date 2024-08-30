@@ -94,6 +94,8 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 
 		///// list main orders
 		applicantApi.GET("/listMainOrders", h.ListMainOrders)
+		//cancel order
+		applicantApi.POST("/CancelMainOrders", h.CancelMainOrders)
 
 	}
 
@@ -132,6 +134,27 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 		"data": data,
 	}
 	return c.JSON(code, resp)
+}
+func (h *Handler) CancelMainOrders(c echo.Context) error {
+	fmt.Println("in activeeee")
+	type request struct {
+		Orderuid string `json:"ouid"`
+	}
+	var req request
+	if err := c.Bind(&req); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"parsing err": err.Error()})
+	}
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+
+	err := h.service.CancelMainOrders(ctx, username, req.Orderuid)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+
+	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
 func (h *Handler) ListMainOrders(c echo.Context) error {
 	fmt.Println("in activeeee")
@@ -648,7 +671,7 @@ func (h *Handler) ReturnItem(c echo.Context) error {
 	fmt.Println("inside the cart list ", username)
 	ctx := c.Request().Context()
 
-	var request model.ReturnOrderPost
+	var request model.ReturnOrderPostForUser
 	if err := c.Bind(&request); err != nil {
 		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
 	}
@@ -711,7 +734,11 @@ func (h *Handler) Gate(c echo.Context) error {
 	key := username + "RZ"
 	fmt.Println("this the id in Gate  !!!", id)
 	var storedData model.RZpayment
-	stored, _ := db.GetRedis(key)
+	stored, err := db.GetRedis(key)
+	if err != nil {
+		return c.Render(http.StatusOK, "404.html", "")
+
+	}
 	json.Unmarshal([]byte(stored), &storedData)
 	fmt.Println("data in razor pay!!!", storedData, "amt !!!!!", storedData.Amt*100)
 	b := int64(storedData.Amt)
@@ -722,6 +749,8 @@ func (h *Handler) Gate(c echo.Context) error {
 		"totalAmount": b,
 		"UserToken":   storedData.Token,
 	}
+	fmt.Println("-", data)
+	//return c.Render(http.StatusOK, "404.html", "")
 	return c.Render(http.StatusOK, "payment.html", data)
 
 }
@@ -740,6 +769,15 @@ func (h *Handler) GateSuccess(c echo.Context) error {
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
+	err = db.DeleteRedis(key)
+	if err != nil {
+		fmt.Println("Error deleting key:", err)
+	}
+	if err != nil {
+		fmt.Println("Error deleting key:", err)
+
+	}
+
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 
 }
@@ -757,6 +795,10 @@ func (h *Handler) GateFailed(c echo.Context) error {
 	fmt.Println("After Gate Failed completed")
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	err = db.DeleteRedis(key)
+	if err != nil {
+		fmt.Println("Error deleting key:", err)
 	}
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 

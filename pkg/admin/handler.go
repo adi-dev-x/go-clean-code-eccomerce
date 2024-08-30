@@ -81,6 +81,8 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 
 		////main order
 		applicantApi.GET("/listMainOrders", h.ListMainOrders)
+
+		applicantApi.POST("/cancelItem", h.CancelItem)
 	}
 }
 
@@ -102,6 +104,28 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 func (h *Handler) VendorListing(c echo.Context) error {
 
 	return nil
+}
+func (h *Handler) CancelItem(c echo.Context) error {
+	fmt.Println("this is in the handler ReturnItem")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	fmt.Println("inside the cart list ", username)
+	ctx := c.Request().Context()
+
+	var request model.ReturnOrderPost
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	errValues := request.Valid()
+	if len(errValues) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": errValues})
+	}
+	err := h.service.ReturnItem(ctx, request, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
 
 // / orders

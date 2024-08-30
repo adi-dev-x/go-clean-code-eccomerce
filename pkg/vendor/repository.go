@@ -46,7 +46,7 @@ type Repository interface {
 	//stock
 	IncreaseStock(ctx context.Context, id string, unit int) error
 
-	UpdateOiStatus(ctx context.Context, id string) error
+	UpdateOiStatus(ctx context.Context, id, ty string) error
 	CreditWallet(ctx context.Context, id string, amt float64) (string, error)
 	UpdateWalletTransaction(ctx context.Context, value interface{}) error
 	ChangeOrderStatus(ctx context.Context, id string) error
@@ -144,16 +144,17 @@ func (r *repository) ChangeOrderStatus(ctx context.Context, id string) error {
 }
 
 // /
-func (r *repository) UpdateOiStatus(ctx context.Context, id string) error {
+func (r *repository) UpdateOiStatus(ctx context.Context, id string, ty string) error {
 
 	query := `
 	UPDATE order_items
-	SET returned = true
-	WHERE id = $1
+	SET returned = true,
+	re_cl=$1
+	WHERE id = $2
 	RETURNING id;
 `
 	var Oi_id string
-	err := r.sql.QueryRowContext(ctx, query, id).Scan(&Oi_id)
+	err := r.sql.QueryRowContext(ctx, query, ty, id).Scan(&Oi_id)
 	if err != nil {
 		return fmt.Errorf("failed to execute update query: %w", err)
 	}
