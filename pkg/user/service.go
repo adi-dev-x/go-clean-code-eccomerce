@@ -62,6 +62,7 @@ type Service interface {
 	/// list main orders
 	ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error)
 	CancelMainOrders(ctx context.Context, username string, orderUid string) error
+	VerifyOtp(ctx context.Context, email string)
 }
 type service struct {
 	repo     Repository
@@ -75,6 +76,10 @@ func NewService(repo Repository, services services.Services) Service {
 		services: services,
 	}
 }
+func (s *service) VerifyOtp(ctx context.Context, email string) {
+	s.repo.VerifyOtp(ctx, email)
+
+}
 func (s *service) CancelMainOrders(ctx context.Context, username string, orderUid string) error {
 
 	id := s.repo.Getid(ctx, username)
@@ -85,6 +90,19 @@ func (s *service) CancelMainOrders(ctx context.Context, username string, orderUi
 	if err != nil {
 		return fmt.Errorf("error in retriving data")
 	}
+	for _, v := range orders {
+		err := s.ReturnItem(ctx, v, username)
+		if err != nil {
+			return fmt.Errorf("error in cancelling ", err)
+		}
+
+	}
+	er := s.repo.ChangeOrderStatus(ctx, orderUid)
+	fmt.Println(er)
+	if er != nil {
+		return fmt.Errorf("error in updating ")
+	}
+
 	return nil
 
 }
@@ -140,7 +158,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostF
 		return fmt.Errorf("this item is already returned")
 
 	case "Cancelled":
-		return fmt.Errorf("this item is payment Cancelled")
+		return fmt.Errorf("this item is  Cancelled")
 
 	}
 
@@ -188,9 +206,10 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostF
 		if p.Status == "Completed" {
 			fmt.Println("in 1st if")
 			// value := []interface{}{p.Amount, id, "Credit"}
-			wallet_id, err = s.repo.CreditWallet(ctx, id, p.Amount)
+			f := p.Amount * float64(p.Unit)
+			wallet_id, err = s.repo.CreditWallet(ctx, id, f)
 			if wallet_id != "" {
-				value := []interface{}{p.Amount, wallet_id, "Credit", id}
+				value := []interface{}{f, wallet_id, "Credit", id}
 				er := s.repo.UpdateWalletTransaction(ctx, value)
 				if er != nil {
 					fmt.Println("there is erorrrr in wallet transaction")
@@ -223,10 +242,10 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostF
 		return fmt.Errorf("failed to update unit: %w", err)
 	}
 	if err := <-Err3; err != nil {
-		return fmt.Errorf("failed to update to redund status: %w", err)
+		return fmt.Errorf("failed to update to refund status: %w", err)
 	}
 	if err := <-Err4; err != nil {
-		return fmt.Errorf("failed to update to redund status: %w", err)
+		return fmt.Errorf("failed to update to refund status: %w", err)
 	}
 
 	return nil

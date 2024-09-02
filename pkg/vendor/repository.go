@@ -50,6 +50,7 @@ type Repository interface {
 	CreditWallet(ctx context.Context, id string, amt float64) (string, error)
 	UpdateWalletTransaction(ctx context.Context, value interface{}) error
 	ChangeOrderStatus(ctx context.Context, id string) error
+	VerifyOtp(ctx context.Context, email string)
 }
 
 type repository struct {
@@ -60,6 +61,20 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) VerifyOtp(ctx context.Context, email string) {
+	query := `
+	UPDATE vendor
+	SET verification =true
+	WHERE email = $1
+	`
+
+	_, err := r.sql.ExecContext(ctx, query, email)
+
+	if err != nil {
+		fmt.Errorf("failed to execute update query: %w", err)
+	}
+
 }
 func (r *repository) UpdateProduct(ctx context.Context, query string, args []interface{}) error {
 	queryWithParams := query
@@ -716,7 +731,7 @@ func (r *repository) Login(ctx context.Context, email string) (model.VendorRegis
 	fmt.Println("Attempting to login with email:", email)
 
 	// SQL query to fetch user details based on email
-	query := `SELECT name, gst, email, password FROM vendor WHERE email = $1`
+	query := `SELECT name, gst, email, password FROM vendor WHERE email = $1 AND verification=true`
 	fmt.Printf("Executing query: %s\n", query)
 
 	var user model.VendorRegisterRequest

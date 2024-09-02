@@ -90,7 +90,11 @@ type Repository interface {
 
 	PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingMainOrders, error)
 	//PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) (model.ListingMainOrders, error)
-	PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPost, error)
+	PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPostForUser, error)
+
+	ChangeOrderStatus(ctx context.Context, id string) error
+
+	VerifyOtp(ctx context.Context, email string)
 }
 
 type repository struct {
@@ -101,6 +105,37 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) VerifyOtp(ctx context.Context, email string) {
+	query := `
+	UPDATE users
+	SET verification =true
+	WHERE email = $1
+	`
+
+	_, err := r.sql.ExecContext(ctx, query, email)
+
+	if err != nil {
+		fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+}
+func (r *repository) ChangeOrderStatus(ctx context.Context, id string) error {
+	fmt.Println("changing in the order status QQQQ", id)
+	query := `
+	UPDATE orders
+	SET status ='Cancelled'
+	WHERE uuid = $1
+	
+`
+
+	_, err := r.sql.ExecContext(ctx, query, id)
+
+	if err != nil {
+		return fmt.Errorf("failed to execute update query: %w", err)
+	}
+
+	return nil
 }
 
 // func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) (model.ListingMainOrders, error) {
@@ -126,7 +161,7 @@ func NewRepository(sqlDB *sql.DB) Repository {
 // 	return order, nil
 // }
 
-func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPost, error) {
+func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPostForUser, error) {
 	query := `
 		SELECT oi.id AS oid
 		FROM orders mo 
@@ -137,7 +172,7 @@ func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID str
 	fmt.Println("Executing PrintingUserSingleMainOrder with UserID:", userID, "OrderUID:", orderUid)
 
 	// Define a slice to hold the order item IDs (which are strings)
-	var orderItemIDs []model.ReturnOrderPost
+	var orderItemIDs []model.ReturnOrderPostForUser
 
 	// Query the database
 	rows, err := r.sql.QueryContext(ctx, query, orderUid, userID)
@@ -148,12 +183,13 @@ func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID str
 	fmt.Println(" rooowsss  ", rows)
 	// Iterate over the result rows
 	for rows.Next() {
-		var orderItemID model.ReturnOrderPost
+		var orderItemID model.ReturnOrderPostForUser
 		if err := rows.Scan(&orderItemID.Oid); err != nil {
 			fmt.Println("errr in thiss")
 			return nil, fmt.Errorf("can't scan result: %w", err)
 		}
 		orderItemID.MoReturn = true
+		orderItemID.Type = "Cancelled"
 		orderItemIDs = append(orderItemIDs, orderItemID)
 	}
 
@@ -276,26 +312,26 @@ func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (
 	WHERE user_id = $2
 	RETURNING id;
 `
+	fmt.Println("wallll---", id, amt)
 	var Wallet_id string
 	err := r.sql.QueryRowContext(ctx, query, amt, id).Scan(&Wallet_id)
 	fmt.Println("hey adiii CreditWallet????!!!!!", Wallet_id, "wallet_id !", "id!", id)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute update query: %w", err)
+		return "", fmt.Errorf("failed to execute update query wallet transaction: %w", err)
 	}
 
 	return Wallet_id, nil
 }
 func (r *repository) UpdateOiStatus(ctx context.Context, id string, ty string) error {
-
+	fmt.Println("---", id, ty)
 	query := `
 	UPDATE order_items
 	SET returned = true,
 	re_cl=$1
-	WHERE id = $2
-	RETURNING id;
+	WHERE id = $2;
 `
-	var Oi_id string
-	err := r.sql.QueryRowContext(ctx, query, ty, id).Scan(&Oi_id)
+
+	_, err := r.sql.ExecContext(ctx, query, ty, id)
 	if err != nil {
 		return fmt.Errorf("failed to execute update query: %w", err)
 	}
@@ -1131,7 +1167,7 @@ func (r *repository) AddAddress(ctx context.Context, request model.Address, id s
 }
 func (r *repository) Login(ctx context.Context, email string) (model.UserRegisterRequest, error) {
 	fmt.Println("theee !!!!!!!!!!!  LLLLoginnnnnn  ", email)
-	query := `SELECT firstname, lastname, email, password FROM users WHERE email = $1`
+	query := `SELECT firstname, lastname, email, password FROM users WHERE email = $1 AND verification=true`
 	fmt.Println(`SELECT firstname, lastname, email, password FROM users WHERE email = 'adithyanunni258@gmail.com' ;`)
 
 	var user model.UserRegisterRequest

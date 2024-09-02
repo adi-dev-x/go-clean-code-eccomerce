@@ -321,6 +321,8 @@ func (h *Handler) OtpLogin(c echo.Context) error {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "wrong otp"})
 
 	}
+	ctx := c.Request().Context()
+	h.service.VerifyOtp(ctx, request.Email)
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
 func isValidEmail(email string) bool {

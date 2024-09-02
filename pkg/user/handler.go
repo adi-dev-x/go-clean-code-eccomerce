@@ -332,6 +332,9 @@ func (h *Handler) OtpLogin(c echo.Context) error {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "wrong otp"})
 
 	}
+	ctx := c.Request().Context()
+	h.service.VerifyOtp(ctx, request.Email)
+
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
 
@@ -594,6 +597,12 @@ func (h *Handler) AddToWish(c echo.Context) error {
 
 	ctx := c.Request().Context()
 	if err := h.service.AddToWish(ctx, request); err != nil {
+
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint \"unique_user_product\"") {
+			fmt.Println("Duplicate entry found for user and product!")
+
+			return h.respondWithError(c, http.StatusConflict, map[string]string{"error": "This product is already in the wishlist."})
+		}
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
