@@ -80,9 +80,12 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.POST("/SalesReport", h.SalesReport)
 
 		////main order
-		applicantApi.GET("/listMainOrders", h.ListMainOrders)
+		applicantApi.GET("/listOrders", h.ListMainOrders)
 
 		applicantApi.POST("/cancelItem", h.CancelItem)
+
+		applicantApi.POST("/UpdateOrder", h.UpdateOrder)
+
 	}
 }
 
@@ -100,6 +103,39 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 		"data": data,
 	}
 	return c.JSON(code, resp)
+}
+func (h *Handler) UpdateOrder(c echo.Context) error {
+	fmt.Println("this is in the handler UpdateOrder")
+	type Request struct {
+		Date string `json:"date`
+		Oid  string `json:"oid`
+	}
+	var request Request
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	const dateFormat = "2006-01-02"
+	parsedDate, fromErr := time.Parse(dateFormat, request.Date)
+	if fromErr != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": "correct date format"})
+	}
+
+	// Get today's date (formatted to YYYY-MM-DD to ignore time)
+	today := time.Now().Truncate(24 * time.Hour)
+	fmt.Println("11", today, parsedDate)
+	// Check if the parsed date is before today
+	if parsedDate.After(today) {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": "should be greater than today"})
+	}
+
+	if request.Oid == "" {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": "Give order id"})
+
+	}
+	ctx := c.Request().Context()
+	h.service.UpdateOrderDate(ctx, request.Oid, request.Date)
+
+	return h.respondWithData(c, http.StatusOK, "success", nil)
 }
 func (h *Handler) VendorListing(c echo.Context) error {
 
@@ -173,7 +209,25 @@ func (h *Handler) ListPendingOrders(c echo.Context) error {
 	}
 	fmt.Println("this is the data ", orders)
 
-	return h.respondWithData(c, http.StatusOK, "success", orders)
+	var results []model.ResultsAdminsales
+	for _, order := range orders {
+		result := model.ResultsAdminsales{
+			Name:     order.Name,
+			Unit:     order.Unit,
+			Amount:   order.Amount,
+			Date:     order.Date,
+			Oid:      order.Oid,
+			VName:    order.VName,
+			Discount: order.Discount,
+			Cmt:      order.CouponAmt,
+			Code:     order.CouponCode,
+			Wmt:      order.WalletAmt,
+		}
+		results = append(results, result)
+	}
+	fmt.Println(results)
+
+	return h.respondWithData(c, http.StatusOK, "success", results)
 }
 func (h *Handler) ListCompletedOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
@@ -185,7 +239,25 @@ func (h *Handler) ListCompletedOrders(c echo.Context) error {
 	}
 	fmt.Println("this is the data ", orders)
 
-	return h.respondWithData(c, http.StatusOK, "success", orders)
+	var results []model.ResultsAdminsales
+	for _, order := range orders {
+		result := model.ResultsAdminsales{
+			Name:     order.Name,
+			Unit:     order.Unit,
+			Amount:   order.Amount,
+			Date:     order.Date,
+			Oid:      order.Oid,
+			VName:    order.VName,
+			Discount: order.Discount,
+			Cmt:      order.CouponAmt,
+			Code:     order.CouponCode,
+			Wmt:      order.WalletAmt,
+		}
+		results = append(results, result)
+	}
+	fmt.Println(results)
+
+	return h.respondWithData(c, http.StatusOK, "success", results)
 }
 func (h *Handler) ListFailedOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
@@ -197,7 +269,25 @@ func (h *Handler) ListFailedOrders(c echo.Context) error {
 	}
 	fmt.Println("this is the data ", orders)
 
-	return h.respondWithData(c, http.StatusOK, "success", orders)
+	var results []model.ResultsAdminsales
+	for _, order := range orders {
+		result := model.ResultsAdminsales{
+			Name:     order.Name,
+			Unit:     order.Unit,
+			Amount:   order.Amount,
+			Date:     order.Date,
+			Oid:      order.Oid,
+			VName:    order.VName,
+			Discount: order.Discount,
+			Cmt:      order.CouponAmt,
+			Code:     order.CouponCode,
+			Wmt:      order.WalletAmt,
+		}
+		results = append(results, result)
+	}
+	fmt.Println(results)
+
+	return h.respondWithData(c, http.StatusOK, "success", results)
 }
 func (h *Handler) ListReturnedOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
@@ -209,7 +299,25 @@ func (h *Handler) ListReturnedOrders(c echo.Context) error {
 	}
 	fmt.Println("this is the data ", orders)
 
-	return h.respondWithData(c, http.StatusOK, "success", orders)
+	var results []model.ResultsAdminsales
+	for _, order := range orders {
+		result := model.ResultsAdminsales{
+			Name:     order.Name,
+			Unit:     order.Unit,
+			Amount:   order.Amount,
+			Date:     order.Date,
+			Oid:      order.Oid,
+			VName:    order.VName,
+			Discount: order.Discount,
+			Cmt:      order.CouponAmt,
+			Code:     order.CouponCode,
+			Wmt:      order.WalletAmt,
+		}
+		results = append(results, result)
+	}
+	fmt.Println(results)
+
+	return h.respondWithData(c, http.StatusOK, "success", results)
 }
 func (h *Handler) ListAllOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
@@ -220,8 +328,25 @@ func (h *Handler) ListAllOrders(c echo.Context) error {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
 	}
 	fmt.Println("this is the data ", orders)
+	var results []model.ResultsAdminsales
+	for _, order := range orders {
+		result := model.ResultsAdminsales{
+			Name:     order.Name,
+			Unit:     order.Unit,
+			Amount:   order.Amount,
+			Date:     order.Date,
+			Oid:      order.Oid,
+			VName:    order.VName,
+			Discount: order.Discount,
+			Cmt:      order.CouponAmt,
+			Code:     order.CouponCode,
+			Wmt:      order.WalletAmt,
+		}
+		results = append(results, result)
+	}
+	fmt.Println(results)
 
-	return h.respondWithData(c, http.StatusOK, "success", orders)
+	return h.respondWithData(c, http.StatusOK, "success", results)
 }
 
 // /////  Singlevendor listing orders of particular vendor  begining

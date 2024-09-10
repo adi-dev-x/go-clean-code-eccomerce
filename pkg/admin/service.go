@@ -34,7 +34,7 @@ type Service interface {
 
 	///orders
 	/// Singlevendor
-	SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReort, error)
+	SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReortVendorinAdmin, error)
 	ListAllOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 	ListReturnedOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
 	ListFailedOrdersSinglevendor(ctx context.Context, username string) ([]model.ListOrdersVendor, error)
@@ -50,7 +50,7 @@ type Service interface {
 	SalesReport(ctx context.Context, request model.SalesReport) (model.SendSalesReortAdmin, error)
 
 	ListMainOrders(ctx context.Context) ([]model.ListingMainOrders, error)
-
+	UpdateOrderDate(ctx context.Context, id, date string)
 	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
 }
 
@@ -64,6 +64,10 @@ func NewService(repo Repository, services services.Services) Service {
 		repo:     repo,
 		services: services,
 	}
+}
+func (s *service) UpdateOrderDate(ctx context.Context, id, date string) {
+	fmt.Println("updating UpdateOrderDate ")
+	s.repo.UpdateOrderDate(ctx, id, date)
 }
 func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error {
 
@@ -240,6 +244,24 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 
 	}
 	fmt.Println("this is the dattaaaa!!!!!", orders)
+
+	var results []model.ResultsAdminsales
+	for _, order := range orders {
+		result := model.ResultsAdminsales{
+			Name:     order.Name,
+			Unit:     order.Unit,
+			Amount:   order.Amount,
+			Date:     order.Date,
+			Oid:      order.Oid,
+			VName:    order.VName,
+			Discount: order.Discount,
+			Cmt:      order.CouponAmt,
+			Code:     order.CouponCode,
+			Wmt:      order.WalletAmt,
+		}
+		results = append(results, result)
+	}
+	fmt.Println(results)
 	// Call repository function
 	salesFacts, err := s.repo.GetSalesFactByDate(ctx, request.Type, startDate, endDate)
 	if err != nil {
@@ -250,6 +272,7 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 		return model.SendSalesReortAdmin{}, nil
 	}
 	slFact := salesFacts[0]
+	fmt.Println("this is the slFact", slFact)
 	//slFact.TotalSales = slFact.TotalSales * 0.02
 	name, err := s.services.GenerateDailySalesReportExcelAdmin(orders, slFact, request.Type, "")
 	fmt.Println(name, "@@@@@@@", err)
@@ -260,7 +283,7 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 
 	fmt.Println(excelfurl, "  --  ", pdffurl)
 	var data model.SendSalesReortAdmin
-	data.Data = orders
+	data.Data = results
 	data.FactsData = slFact
 	data.ExcelUrl = excelfurl
 	data.PdfUrl = pdffurl
@@ -326,7 +349,7 @@ func (s *service) ListAllOrders(ctx context.Context) ([]model.ListOrdersAdmin, e
 
 // //list Singlevendor begining
 
-func (s *service) SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReort, error) {
+func (s *service) SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReortVendorinAdmin, error) {
 
 	// Parse dates
 	const dateFormat = "2006-01-02"
@@ -336,22 +359,22 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	if request.Type == "Custom" {
 		startDate, err = time.Parse(dateFormat, request.From)
 		if err != nil {
-			return model.SendSalesReort{}, fmt.Errorf("invalid From date format: %w", err)
+			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("invalid From date format: %w", err)
 		}
 		endDate, err = time.Parse(dateFormat, request.To)
 		if err != nil {
-			return model.SendSalesReort{}, fmt.Errorf("invalid To date format: %w", err)
+			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("invalid To date format: %w", err)
 		}
 		orders, err = s.repo.SalesReportOrdersCustomSinglevendor(ctx, startDate, endDate, id)
 		fmt.Println("in data!!", orders)
 		if err != nil {
-			return model.SendSalesReort{}, fmt.Errorf("error in receiving data")
+			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving data")
 		}
 	}
 	if request.Type == "Yearly" {
 		orders, err = s.repo.SalesReportOrdersYearlySinglevendor(ctx, id)
 		if err != nil {
-			return model.SendSalesReort{}, fmt.Errorf("error in receiving yearly data: %w", err)
+			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving yearly data: %w", err)
 		}
 
 	}
@@ -359,7 +382,7 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	if request.Type == "Monthly" {
 		orders, err = s.repo.SalesReportOrdersMonthlySinglevendor(ctx, id)
 		if err != nil {
-			return model.SendSalesReort{}, fmt.Errorf("error in receiving monthly data: %w", err)
+			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving monthly data: %w", err)
 		}
 
 	}
@@ -367,7 +390,7 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	if request.Type == "Weekly" {
 		orders, err = s.repo.SalesReportOrdersWeeklySinglevendor(ctx, id)
 		if err != nil {
-			return model.SendSalesReort{}, fmt.Errorf("error in receiving weekly data: %w", err)
+			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving weekly data: %w", err)
 		}
 
 	}
@@ -375,19 +398,35 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	if request.Type == "Daily" {
 		orders, err = s.repo.SalesReportOrdersDailySinglevendor(ctx, id)
 		if err != nil {
-			return model.SendSalesReort{}, fmt.Errorf("error in receiving daily data: %w", err)
+			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving daily data: %w", err)
 		}
 
 	}
 	fmt.Println("this is the dattaaaa!!!!!", orders)
 	// Call repository function
+	var results []model.ResultsVendorsales
+	for _, order := range orders {
+		result := model.ResultsVendorsales{
+			Name:   order.Name,
+			Unit:   order.Unit,
+			Amount: order.Amount,
+			Date:   order.Date,
+			Oid:    order.Oid,
+
+			Discount: order.Discount,
+			Cmt:      order.CouponAmt,
+			Code:     order.CouponCode,
+			Wmt:      order.WalletAmt,
+		}
+		results = append(results, result)
+	}
 	salesFacts, err := s.repo.GetSalesFactByDateSinglevendor(ctx, request.Type, startDate, endDate, id)
 	if err != nil {
-		return model.SendSalesReort{}, fmt.Errorf("failed to get sales facts: %w", err)
+		return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("failed to get sales facts: %w", err)
 	}
 	fmt.Println("valueeee in salesFact!!!", salesFacts)
 	if salesFacts == nil {
-		return model.SendSalesReort{}, nil
+		return model.SendSalesReortVendorinAdmin{}, nil
 	}
 	slFact := salesFacts[0]
 	name, err := s.services.GenerateDailySalesReportExcel(orders, slFact, request.Type, "Admin_EXCEL")
@@ -398,8 +437,8 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	pdffurl := "http://localhost:8081/" + pname
 
 	fmt.Println(excelfurl, "  --  ", pdffurl)
-	var data model.SendSalesReort
-	data.Data = orders
+	var data model.SendSalesReortVendorinAdmin
+	data.Data = results
 	data.FactsData = slFact
 	data.ExcelUrl = excelfurl
 	data.PdfUrl = pdffurl

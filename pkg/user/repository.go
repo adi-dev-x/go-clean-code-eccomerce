@@ -88,7 +88,7 @@ type Repository interface {
 
 	ListTypeTransactions(ctx context.Context, id string, ty string) ([]model.UserTransactions, error)
 
-	PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingMainOrders, error)
+	PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingUserMainOrders, error)
 	//PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) (model.ListingMainOrders, error)
 	PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPostForUser, error)
 
@@ -201,19 +201,16 @@ func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID str
 	return orderItemIDs, nil
 }
 
-func (r *repository) PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingMainOrders, error) {
+func (r *repository) PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingUserMainOrders, error) {
 	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount, 
-	                 u.firstname || ' ' || u.lastname AS user, 
-	                 COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || 
-	                 COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || 
-	                 COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || 
-	                 COALESCE(a.country, '') AS user_ad, 
-	                 COALESCE(DATE(mo.delivery_date)::text, '') AS delivery_date 
-			  FROM orders mo
+	                 mo.delivery_date,
+			        mo.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
+					 FROM orders mo
 			  JOIN users u ON mo.user_id = u.id 
 			  JOIN address a ON mo.address_id = a.address_id
+			  LEFT JOIN coupon c ON mo.cid =c.id
 			  WHERE u.id=$1`
-	var orders []model.ListingMainOrders
+	var orders []model.ListingUserMainOrders
 
 	rows, err := r.sql.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -222,9 +219,9 @@ func (r *repository) PrintingUserMainOrder(ctx context.Context, userID string) (
 	defer rows.Close()
 
 	for rows.Next() {
-		var order model.ListingMainOrders
+		var order model.ListingUserMainOrders
 		err := rows.Scan(&order.OR_id, &order.Delivery_Stat, &order.D_Type, &order.O_status, &order.Amount,
-			&order.User, &order.UserAddress, &order.Delivery_date)
+			&order.Delivery_date, &order.Discount, &order.Cmt, &order.Code, &order.Wmt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -371,7 +368,7 @@ func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (
 	return order, nil
 }
 func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error) {
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid FROM order_items oi 
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid,oi.discount FROM order_items oi 
 	JOIN product_models p ON oi.product_id = p.id 
 	JOIN orders mo ON oi.order_id = mo.id 
 	where oi.user_id=$1 ORDER BY oi.id DESC;
@@ -385,7 +382,7 @@ func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.List
 	defer rows.Close()
 	for rows.Next() {
 		var order model.ListAllOrdersUsers
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid)
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -794,8 +791,9 @@ func (r *repository) CreateOrder(ctx context.Context, order model.InsertOrder) (
 }
 func (r *repository) ActiveListing(ctx context.Context) ([]model.Coupon, error) {
 	fmt.Println("this is lia couppp")
+
 	query := `
-		SELECT code,expiry,min_amount,amount from coupon WHERE TO_DATE(expiry, 'DD/MM/YYYY') > CURRENT_DATE;`
+		SELECT code,expiry,min_amount,amount,max_amount from coupon WHERE TO_DATE(expiry, 'YYYY-MM-DD') > CURRENT_DATE; `
 
 	rows, err := r.sql.QueryContext(ctx, query)
 	if err != nil {
@@ -806,7 +804,7 @@ func (r *repository) ActiveListing(ctx context.Context) ([]model.Coupon, error) 
 	var products []model.Coupon
 	for rows.Next() {
 		var product model.Coupon
-		err := rows.Scan(&product.Code, &product.Expiry, &product.Minamount, &product.Amount)
+		err := rows.Scan(&product.Code, &product.Expiry, &product.Minamount, &product.Amount, &product.Maxamount)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}

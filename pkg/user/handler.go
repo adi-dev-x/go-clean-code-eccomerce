@@ -93,7 +93,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listDebitTransactions", h.ListDebitTransactions)
 
 		///// list main orders
-		applicantApi.GET("/listMainOrders", h.ListMainOrders)
+		applicantApi.GET("/listOrders", h.ListMainOrders)
 		//cancel order
 		applicantApi.POST("/CancelMainOrders", h.CancelMainOrders)
 

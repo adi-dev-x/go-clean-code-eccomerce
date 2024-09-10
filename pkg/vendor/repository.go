@@ -62,6 +62,7 @@ func NewRepository(sqlDB *sql.DB) Repository {
 		sql: sqlDB,
 	}
 }
+
 func (r *repository) VerifyOtp(ctx context.Context, email string) {
 	query := `
 	UPDATE vendor
@@ -224,13 +225,14 @@ func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.List
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
     COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad, 
-     oi.id AS oid
+     mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
     JOIN vendor v ON p.vendor_id = v.id 
     JOIN orders mo ON oi.order_id = mo.id 
     JOIN users u ON mo.user_id = u.id 
     JOIN address a ON mo.address_id = a.address_id 
+	LEFT JOIN coupon c ON mo.cid =c.id
     WHERE v.id = $1;`
 
 	var orders []model.ListOrdersVendor
@@ -243,7 +245,7 @@ func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.List
 
 	for rows.Next() {
 		var order model.ListOrdersVendor
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add, &order.Oid)
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add, &order.Oid, &order.Discount, &order.CouponAmt, &order.CouponCode, &order.WalletAmt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -261,13 +263,15 @@ func (r *repository) ListReturnedOrders(ctx context.Context, id string) ([]model
     p.name, oi.quantity, mo.status, oi.returned, oi.price, oi.product_id AS pid, 
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
-    COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad 
+    COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad ,
+    mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
     JOIN vendor v ON p.vendor_id = v.id 
     JOIN orders mo ON oi.order_id = mo.id 
     JOIN users u ON mo.user_id = u.id 
     JOIN address a ON mo.address_id = a.address_id 
+	LEFT JOIN coupon c ON mo.cid =c.id
     WHERE v.id = $1 AND oi.returned=true;`
 
 	var orders []model.ListOrdersVendor
@@ -280,7 +284,7 @@ func (r *repository) ListReturnedOrders(ctx context.Context, id string) ([]model
 
 	for rows.Next() {
 		var order model.ListOrdersVendor
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add)
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.User, &order.Add, &order.Oid, &order.Discount, &order.CouponAmt, &order.CouponCode, &order.WalletAmt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}

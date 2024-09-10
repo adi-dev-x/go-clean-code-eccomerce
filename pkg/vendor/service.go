@@ -38,6 +38,7 @@ type Service interface {
 	SalesReport(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReort, error)
 	//returning
 	VerifyOtp(ctx context.Context, email string)
+
 	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
 }
 
@@ -53,6 +54,7 @@ func NewService(repo Repository, services services.Services) Service {
 		services: services,
 	}
 }
+
 func (s *service) VerifyOtp(ctx context.Context, email string) {
 	s.repo.VerifyOtp(ctx, email)
 

@@ -23,6 +23,7 @@ type ListAllOrdersUsers struct {
 	Pid      string  `json:"pid"`
 	Date     string  `json:"date"`
 	Oid      string  `json:"oid"`
+	Discount float64 `json:"discount"`
 }
 type ListAllOrdersCheck struct {
 	Name     string  `json:"name"`
@@ -82,38 +83,75 @@ type SendSalesReort struct {
 	ExcelUrl  string
 }
 type SendSalesReortAdmin struct {
-	Data      []ListOrdersAdmin
+	Data      []ResultsAdminsales
 	FactsData Salesfact
 	PdfUrl    string
 	ExcelUrl  string
 }
-
-type ListOrdersVendor struct {
-	Name     string  `json:"name"`
-	Unit     int     `json:"unit"`
-	Status   string  `json:"status"`
-	Returned bool    `json:"returned"`
-	Amount   float64 `json:"amount"`
-	Pid      string  `json:"pid"`
-	Date     string  `json:"date"`
-	User     string  `json:"user"`
-	Add      string  `json:"user_ad"`
-	ListDate string  `json:"checks"`
-	Oid      string  `json:"oid"`
+type SendSalesReortVendorinAdmin struct {
+	Data      []ResultsVendorsales
+	FactsData Salesfact
+	PdfUrl    string
+	ExcelUrl  string
 }
-type ListOrdersAdmin struct {
+type ResultsAdminsales struct {
 	Name     string  `json:"name"`
 	Unit     int     `json:"unit"`
-	Status   string  `json:"status"`
-	Returned bool    `json:"returned"`
 	Amount   float64 `json:"amount"`
-	Pid      string  `json:"pid"`
 	Date     string  `json:"date"`
-	User     string  `json:"user"`
-	Add      string  `json:"user_ad"`
-	ListDate string  `json:"checks"`
 	Oid      string  `json:"oid"`
 	VName    string  `json:"vname"`
+	Discount float64 `json:"discount"`
+	Cmt      float64 `json:"cmt"`
+	Code     string  `json:"code"`
+	Wmt      float64 `json:"wmt"`
+}
+type ResultsVendorsales struct {
+	Name   string  `json:"name"`
+	Unit   int     `json:"unit"`
+	Amount float64 `json:"amount"`
+	Date   string  `json:"date"`
+	Oid    string  `json:"oid"`
+
+	Discount float64 `json:"discount"`
+	Cmt      float64 `json:"cmt"`
+	Code     string  `json:"code"`
+	Wmt      float64 `json:"wmt"`
+}
+type ListOrdersVendor struct {
+	Name       string  `json:"name"`
+	Unit       int     `json:"unit"`
+	Status     string  `json:"status"`
+	Returned   bool    `json:"returned"`
+	Amount     float64 `json:"amount"`
+	Pid        string  `json:"pid"`
+	Date       string  `json:"date"`
+	User       string  `json:"user"`
+	Add        string  `json:"user_ad"`
+	ListDate   string  `json:"checks"`
+	Oid        string  `json:"oid"`
+	Discount   float64 `json:"discount"`
+	CouponAmt  float64 `json:"cmt"`
+	CouponCode string  `json:"code"`
+	WalletAmt  float64 `json:"wmt"`
+}
+type ListOrdersAdmin struct {
+	Name       string  `json:"name"`
+	Unit       int     `json:"unit"`
+	Status     string  `json:"status"`
+	Returned   bool    `json:"returned"`
+	Amount     float64 `json:"amount"`
+	Pid        string  `json:"pid"`
+	Date       string  `json:"date"`
+	User       string  `json:"user"`
+	Add        string  `json:"user_ad"`
+	ListDate   string  `json:"checks"`
+	Oid        string  `json:"oid"`
+	VName      string  `json:"vname"`
+	Discount   float64 `json:"discount"`
+	CouponAmt  float64 `json:"cmt"`
+	CouponCode string  `json:"code"`
+	WalletAmt  float64 `json:"wmt"`
 }
 type SalesReport struct {
 	Type string `json:"type"`
@@ -164,4 +202,20 @@ type ListingMainOrders struct {
 	User          string  `json:"user"`
 	UserAddress   string  `json:"user_address"`
 	Delivery_date string  `json:"delivery_date"`
+	Discount      float64 `json:"discount"`
+	Cmt           float64 `json:"cmt"`
+	Code          string  `json:"code"`
+	Wmt           float64 `json:"wmt"`
+}
+type ListingUserMainOrders struct {
+	OR_id         string  `json:"id"`
+	Delivery_Stat bool    `json:"delivered"`
+	D_Type        string  `json:"payment_method"`
+	O_status      string  `json:"status"`
+	Amount        float64 `json:"payable_amount"`
+	Delivery_date string  `json:"delivery_date"`
+	Discount      float64 `json:"discount"`
+	Cmt           float64 `json:"cmt"`
+	Code          string  `json:"code"`
+	Wmt           float64 `json:"wmt"`
 }

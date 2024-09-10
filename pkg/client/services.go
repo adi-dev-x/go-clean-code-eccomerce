@@ -33,54 +33,60 @@ type MyService struct {
 }
 
 func (s MyService) GenerateDailySalesReportPDFAdmin(orders []model.ListOrdersAdmin, facts model.Salesfact, types string, id string) (string, error) {
-	// Create a new PDF document
+
 	pdf := gofpdf.New("P", "mm", "A4", "")
 
-	// Add a page
 	pdf.AddPage()
 
-	// Set font
 	pdf.SetFont("Arial", "", 12)
 
-	// Add Salesfact data
 	pdf.Cell(0, 10, fmt.Sprintf("Revenue: %.2f", facts.Revenue))
-	pdf.Ln(10) // Line break
+	pdf.Ln(10)
 
 	pdf.Cell(0, 10, fmt.Sprintf("Total Discount: %.2f", facts.TotalDiscount))
-	pdf.Ln(10) // Line break
+	pdf.Ln(10)
 
 	pdf.Cell(0, 10, fmt.Sprintf("Total Sales: %.2f", facts.TotalSales))
-	pdf.Ln(10) // Line break
+	pdf.Ln(10)
 
 	pdf.Cell(0, 10, fmt.Sprintf("Total Orders: %d", facts.TotalOrders))
-	pdf.Ln(20) // Line break before table headers
-
-	// Set table headers
-	headers := []string{"Check Date", "Product Name", "Quantity", "Status", "Returned", "Total Amount", "Product ID", "User", "User Address", "Order Date"}
+	pdf.Ln(20)
+	headers := []string{"Check Date", "Product Name", "Quantity", "Amount", "Product ID", "User", "discount", "coupon amt", "coupon code", "wallet amt", "Order id"}
 	for _, header := range headers {
 		pdf.Cell(30, 10, header)
 	}
-	pdf.Ln(10) // Line break after headers
+	pdf.Ln(10)
 
-	// Add order data
 	for _, order := range orders {
-		pdf.Cell(30, 10, order.ListDate)
-		pdf.Cell(30, 10, order.Name)
-		pdf.Cell(20, 10, fmt.Sprintf("%d", order.Unit))
-		pdf.Cell(30, 10, order.Status)
-		pdf.Cell(20, 10, fmt.Sprintf("%t", order.Returned))
-		pdf.Cell(30, 10, fmt.Sprintf("%.2f", order.Amount))
-		pdf.Cell(20, 10, order.Pid)
-		pdf.Cell(30, 10, order.User)
-		pdf.Cell(40, 10, order.Add)
-		pdf.Cell(30, 10, order.Date)
-		pdf.Ln(10) // Line break after each row
+		timestamp := order.Date
+
+		// Parse the timestamp
+		t, err := time.Parse(time.RFC3339, timestamp)
+		if err != nil {
+			fmt.Println("Error parsing time:", err)
+
+		}
+
+		date := t.Format("2006-01-02")
+		fmt.Println("checking the date is changed !!!", date)
+		pdf.Cell(25, 10, date)
+
+		pdf.Cell(20, 10, order.Name)
+		pdf.Cell(10, 10, fmt.Sprintf("%d", order.Unit))
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.Amount))
+
+		pdf.Cell(10, 10, order.Pid)
+		pdf.Cell(30, 10, order.VName)
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.Discount))
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.CouponAmt))
+		pdf.Cell(10, 10, order.CouponCode)
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.WalletAmt))
+		pdf.Cell(20, 10, order.Oid)
+		pdf.Ln(10)
 	}
 
-	// Save the file
 	rand.Seed(time.Now().UnixNano())
 
-	// Generate a random number between 0 and 100
 	randomNumber := rand.Intn(101)
 	fileName := fmt.Sprintf("%s_Sales_Report_%d_%s.pdf", types, randomNumber, id)
 	if err := pdf.OutputFileAndClose(fileName); err != nil {
@@ -90,57 +96,65 @@ func (s MyService) GenerateDailySalesReportPDFAdmin(orders []model.ListOrdersAdm
 	return fileName, nil
 }
 func (s MyService) GenerateDailySalesReportPDF(orders []model.ListOrdersVendor, facts model.Salesfact, types string, id string) (string, error) {
-	// Create a new PDF document
+
 	pdf := gofpdf.New("P", "mm", "A4", "")
 
-	// Add a page
 	pdf.AddPage()
 
-	// Set font
 	pdf.SetFont("Arial", "", 12)
 
-	// Add Salesfact data
 	pdf.Cell(0, 10, fmt.Sprintf("Revenue: %.2f", facts.Revenue))
-	pdf.Ln(10) // Line break
+	pdf.Ln(10)
 
 	pdf.Cell(0, 10, fmt.Sprintf("Total Discount: %.2f", facts.TotalDiscount))
-	pdf.Ln(10) // Line break
+	pdf.Ln(10)
 
 	pdf.Cell(0, 10, fmt.Sprintf("Total Sales: %.2f", facts.TotalSales))
-	pdf.Ln(10) // Line break
+	pdf.Ln(10)
 
 	pdf.Cell(0, 10, fmt.Sprintf("Total Orders: %d", facts.TotalOrders))
-	pdf.Ln(20) // Line break before table headers
+	pdf.Ln(20)
 
-	// Set table headers
-	headers := []string{"Check Date", "Product Name", "Quantity", "Status", "Returned", "Total Amount", "Product ID", "User", "User Address", "Order Date"}
+	headers := []string{"Check Date", "Product Name", "Quantity", "Amount", "Product ID", "discount", "coupon amt", "coupon code", "wallet amt", "Order id"}
 	for _, header := range headers {
 		pdf.Cell(30, 10, header)
 	}
-	pdf.Ln(10) // Line break after headers
+	pdf.Ln(10)
 
-	// Add order data
 	for _, order := range orders {
-		pdf.Cell(30, 10, order.ListDate)
-		pdf.Cell(30, 10, order.Name)
-		pdf.Cell(20, 10, fmt.Sprintf("%d", order.Unit))
-		pdf.Cell(30, 10, order.Status)
-		pdf.Cell(20, 10, fmt.Sprintf("%t", order.Returned))
-		pdf.Cell(30, 10, fmt.Sprintf("%.2f", order.Amount))
-		pdf.Cell(20, 10, order.Pid)
-		pdf.Cell(30, 10, order.User)
-		pdf.Cell(40, 10, order.Add)
-		pdf.Cell(30, 10, order.Date)
-		pdf.Ln(10) // Line break after each row
+		timestamp := order.Date
+
+		// Parse the timestamp
+		t, err := time.Parse(time.RFC3339, timestamp)
+		if err != nil {
+			fmt.Println("Error parsing time:", err)
+
+		}
+
+		date := t.Format("2006-01-02")
+		fmt.Println("checking the date is changed !!!", date)
+		pdf.Cell(25, 10, date)
+
+		pdf.Cell(20, 10, order.Name)
+		pdf.Cell(10, 10, fmt.Sprintf("%d", order.Unit))
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.Amount))
+
+		pdf.Cell(10, 10, order.Pid)
+
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.Discount))
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.CouponAmt))
+		pdf.Cell(10, 10, order.CouponCode)
+		pdf.Cell(10, 10, fmt.Sprintf("%.2f", order.WalletAmt))
+		pdf.Cell(20, 10, order.Oid)
+		pdf.Ln(10)
 	}
 	if id == "" {
 		id = "Admin_Report"
 	}
 	rand.Seed(time.Now().UnixNano())
 
-	// Generate a random number between 0 and 100
 	randomNumber := rand.Intn(101)
-	// Save the file
+
 	fileName := fmt.Sprintf("%s_Sales_Report_%d_%s.pdf", types, randomNumber, id)
 	if err := pdf.OutputFileAndClose(fileName); err != nil {
 		return "", fmt.Errorf("failed to save PDF file: %w", err)
@@ -171,7 +185,7 @@ func (s MyService) GenerateDailySalesReportExcelAdmin(orders []model.ListOrdersA
 	startingRowForOrders := 6 // Two rows after the last fact row
 
 	// Set headers
-	headers := []string{"Check Date", "Product Name", "Quantity", "Status", "Returned", "Total Amount", "Product ID", "User", "User Address", "Order Date", "Vendor Name"}
+	headers := []string{"Check Date", "Product Name", "Quantity", "Amount", "Product ID", "Vendor", "discount", "coupon amt", "coupon code", "wallet amt", "Order id"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s%d", string(rune('A'+i)), startingRowForOrders)
 		file.SetCellValue(sheet, cell, header)
@@ -180,17 +194,29 @@ func (s MyService) GenerateDailySalesReportExcelAdmin(orders []model.ListOrdersA
 	// Fill data
 	for i, order := range orders {
 		row := startingRowForOrders + i + 1 // Start from the row after headers
-		file.SetCellValue(sheet, fmt.Sprintf("A%d", row), order.ListDate)
+		timestamp := order.Date
+
+		// Parse the timestamp
+		t, err := time.Parse(time.RFC3339, timestamp)
+		if err != nil {
+			fmt.Println("Error parsing time:", err)
+
+		}
+
+		date := t.Format("2006-01-02")
+		fmt.Println("checking the date is changed !!!", date)
+
+		file.SetCellValue(sheet, fmt.Sprintf("A%d", row), date)
 		file.SetCellValue(sheet, fmt.Sprintf("B%d", row), order.Name)
 		file.SetCellValue(sheet, fmt.Sprintf("C%d", row), order.Unit)
-		file.SetCellValue(sheet, fmt.Sprintf("D%d", row), order.Status)
-		file.SetCellValue(sheet, fmt.Sprintf("E%d", row), order.Returned)
-		file.SetCellValue(sheet, fmt.Sprintf("F%d", row), order.Amount)
-		file.SetCellValue(sheet, fmt.Sprintf("G%d", row), order.Pid)
-		file.SetCellValue(sheet, fmt.Sprintf("H%d", row), order.User)
-		file.SetCellValue(sheet, fmt.Sprintf("I%d", row), order.Add)
-		file.SetCellValue(sheet, fmt.Sprintf("J%d", row), order.Date)
-		file.SetCellValue(sheet, fmt.Sprintf("k%d", row), order.VName)
+		file.SetCellValue(sheet, fmt.Sprintf("D%d", row), order.Amount)
+		file.SetCellValue(sheet, fmt.Sprintf("E%d", row), order.Pid)
+		file.SetCellValue(sheet, fmt.Sprintf("F%d", row), order.VName)
+		file.SetCellValue(sheet, fmt.Sprintf("G%d", row), order.Discount)
+		file.SetCellValue(sheet, fmt.Sprintf("H%d", row), order.CouponAmt)
+		file.SetCellValue(sheet, fmt.Sprintf("I%d", row), order.CouponCode)
+		file.SetCellValue(sheet, fmt.Sprintf("J%d", row), order.WalletAmt)
+		file.SetCellValue(sheet, fmt.Sprintf("k%d", row), order.Oid)
 	}
 	rand.Seed(time.Now().UnixNano())
 
@@ -228,7 +254,7 @@ func (s MyService) GenerateDailySalesReportExcel(orders []model.ListOrdersVendor
 	startingRowForOrders := 6 // Two rows after the last fact row
 
 	// Set headers
-	headers := []string{"Check Date", "Product Name", "Quantity", "Status", "Returned", "Total Amount", "Product ID", "User", "User Address", "Order Date"}
+	headers := []string{"Check Date", "Product Name", "Quantity", "Amount", "Product ID", "discount", "coupon amt", "coupon code", "wallet amt", "Order id"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s%d", string(rune('A'+i)), startingRowForOrders)
 		file.SetCellValue(sheet, cell, header)
@@ -237,16 +263,29 @@ func (s MyService) GenerateDailySalesReportExcel(orders []model.ListOrdersVendor
 	// Fill data
 	for i, order := range orders {
 		row := startingRowForOrders + i + 1 // Start from the row after headers
-		file.SetCellValue(sheet, fmt.Sprintf("A%d", row), order.ListDate)
+		timestamp := order.Date
+
+		// Parse the timestamp
+		t, err := time.Parse(time.RFC3339, timestamp)
+		if err != nil {
+			fmt.Println("Error parsing time:", err)
+
+		}
+
+		date := t.Format("2006-01-02")
+		fmt.Println("checking the date is changed !!!", date)
+
+		file.SetCellValue(sheet, fmt.Sprintf("A%d", row), date)
 		file.SetCellValue(sheet, fmt.Sprintf("B%d", row), order.Name)
 		file.SetCellValue(sheet, fmt.Sprintf("C%d", row), order.Unit)
-		file.SetCellValue(sheet, fmt.Sprintf("D%d", row), order.Status)
-		file.SetCellValue(sheet, fmt.Sprintf("E%d", row), order.Returned)
-		file.SetCellValue(sheet, fmt.Sprintf("F%d", row), order.Amount)
-		file.SetCellValue(sheet, fmt.Sprintf("G%d", row), order.Pid)
-		file.SetCellValue(sheet, fmt.Sprintf("H%d", row), order.User)
-		file.SetCellValue(sheet, fmt.Sprintf("I%d", row), order.Add)
-		file.SetCellValue(sheet, fmt.Sprintf("J%d", row), order.Date)
+		file.SetCellValue(sheet, fmt.Sprintf("D%d", row), order.Amount)
+		file.SetCellValue(sheet, fmt.Sprintf("E%d", row), order.Pid)
+
+		file.SetCellValue(sheet, fmt.Sprintf("F%d", row), order.Discount)
+		file.SetCellValue(sheet, fmt.Sprintf("G%d", row), order.CouponAmt)
+		file.SetCellValue(sheet, fmt.Sprintf("H%d", row), order.CouponCode)
+		file.SetCellValue(sheet, fmt.Sprintf("I%d", row), order.WalletAmt)
+		file.SetCellValue(sheet, fmt.Sprintf("J%d", row), order.Oid)
 	}
 	rand.Seed(time.Now().UnixNano())
 
@@ -342,7 +381,6 @@ func (s MyService) SendOrderReturnConfirmationEmailVendor(name string, amt float
 	return nil
 }
 
-// GenerateOtp generates a random OTP of the specified length.
 func (s MyService) GenerateOtp(length int) int {
 	rand.Seed(time.Now().UnixNano())
 
@@ -353,7 +391,6 @@ func (s MyService) GenerateOtp(length int) int {
 	return randomNum
 }
 
-// SendEmailWithOTP sends an OTP to the specified email address.
 func (s MyService) SendEmailWithOTP(email string) (string, error) {
 	// Generate OTP
 	otp := strconv.Itoa(s.GenerateOtp(6))

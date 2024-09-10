@@ -76,6 +76,7 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 	}
 	return c.JSON(code, resp)
 }
+
 func (h *Handler) UpdateProduct(c echo.Context) error {
 
 	fmt.Println("this is in the handler UpdateProduct")

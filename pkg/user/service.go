@@ -60,7 +60,7 @@ type Service interface {
 	ListTypeTransactions(ctx context.Context, username string, ty string) ([]model.UserTransactions, error)
 
 	/// list main orders
-	ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error)
+	ListMainOrders(ctx context.Context, username string) ([]model.ListingUserMainOrders, error)
 	CancelMainOrders(ctx context.Context, username string, orderUid string) error
 	VerifyOtp(ctx context.Context, email string)
 }
@@ -106,12 +106,12 @@ func (s *service) CancelMainOrders(ctx context.Context, username string, orderUi
 	return nil
 
 }
-func (s *service) ListMainOrders(ctx context.Context, username string) ([]model.ListingMainOrders, error) {
+func (s *service) ListMainOrders(ctx context.Context, username string) ([]model.ListingUserMainOrders, error) {
 
 	id := s.repo.Getid(ctx, username)
 	orders, err := s.repo.PrintingUserMainOrder(ctx, id)
 	if err != nil {
-		return []model.ListingMainOrders{}, fmt.Errorf("error in retriving data")
+		return []model.ListingUserMainOrders{}, fmt.Errorf("error in retriving data")
 	}
 	return orders, nil
 
