@@ -18,6 +18,8 @@ type Repository interface {
 	///product
 	Listing(ctx context.Context, id string) ([]model.ProductList, error)
 	CategoryListing(ctx context.Context, category string, id string) ([]model.ProductList, error)
+	BestSellingListingProductCategory(ctx context.Context, category string, id string) ([]model.VendorProductList, error)
+	BestSellingListingProduct(ctx context.Context, id string) ([]model.ProductListingUsers, error)
 	AddProduct(ctx context.Context, request model.Product) error
 	LatestListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PhighListing(ctx context.Context, id string) ([]model.ProductList, error)
@@ -723,8 +725,8 @@ func (r *repository) Register(ctx context.Context, request model.VendorRegisterR
 }
 func (r *repository) AddProduct(ctx context.Context, request model.Product) error {
 	fmt.Println("this is in the repository Register")
-	query := `INSERT INTO product_models (name, category, status, tax,amount,units,vendor_id,discount,description) VALUES ($1, $2, $3, $4,$5,$6,$7,$8,$9)`
-	_, err := r.sql.ExecContext(ctx, query, request.Name, request.Category, request.Status, request.Tax, request.Price, request.Unit, request.Vendorid, request.Discount, request.Description)
+	query := `INSERT INTO product_models (name, category, status, tax,amount,units,vendor_id,discount,description,brand) VALUES ($1, $2, $3, $4,$5,$6,$7,$8,$9,$10)`
+	_, err := r.sql.ExecContext(ctx, query, request.Name, request.Category, request.Status, request.Tax, request.Price, request.Unit, request.Vendorid, request.Discount, request.Description, request.Brand)
 	if err != nil {
 		return fmt.Errorf("failed to execute insert query: %w", err)
 	}
@@ -770,7 +772,7 @@ func (r *repository) Listing(ctx context.Context, id string) ([]model.ProductLis
 		FROM 
 			product_models 
 		INNER JOIN 
-			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1;`
+			vendor ON product_models.vendor_id = vendor.id WHERE  vendor.id=$1;`
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
@@ -808,7 +810,7 @@ func (r *repository) CategoryListing(ctx context.Context, category string, id st
 		FROM 
 			product_models 
 		INNER JOIN 
-			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1 AND product_models.category ILIKE '%' || $2 || '%';`
+			vendor ON product_models.vendor_id = vendor.id WHERE  vendor.id=$1 AND product_models.category ILIKE '%' || $2 || '%';`
 
 	rows, err := r.sql.QueryContext(ctx, query, id, category)
 	if err != nil {
@@ -832,6 +834,169 @@ func (r *repository) CategoryListing(ctx context.Context, category string, id st
 
 	return products, nil
 }
+func (r *repository) BestSellingListingProductCategory(ctx context.Context, category string, id string) ([]model.VendorProductList, error) {
+	query := `
+
+
+
+	WITH best_selling_products AS (
+    SELECT 
+        pm.name,
+        pm.category,
+        pm.units,
+        pm.tax,
+        pm.amount,
+        pm.status,
+        pm.discount,
+        COALESCE(SUM(oi.quantity), 0) AS total_sold
+    FROM 
+        product_models pm
+    LEFT JOIN 
+        order_items oi ON pm.id = oi.product_id
+    LEFT JOIN 
+        vendor v ON pm.vendor_id = v.id
+    WHERE 
+      v.id = $1  
+    AND pm.category ILIKE '%' || $2 || '%'  -- Partial category match
+    GROUP BY 
+        pm.name, pm.category, pm.units, pm.tax, pm.amount, pm.status, pm.discount
+		HAVING 
+        SUM(oi.quantity) > 0
+),
+ranked_products AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY total_sold DESC, name) AS rank
+    FROM 
+        best_selling_products
+)
+SELECT 
+    name,
+    category,
+    units,
+    tax,
+    amount,
+    status,
+    discount,
+    total_sold
+    
+FROM 
+    ranked_products
+WHERE 
+    rank <= 10
+ORDER BY
+    rank;
+			 
+			
+			
+			`
+
+	rows, err := r.sql.QueryContext(ctx, query, id, category)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.VendorProductList
+	for rows.Next() {
+		var product model.VendorProductList
+		err := rows.Scan(
+			&product.Name,
+			&product.Category,
+			&product.Unit,
+			&product.Tax,
+			&product.Price,
+			&product.Status,
+			&product.Discount,
+			&product.TotalSold,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+func (r *repository) BestSellingListingProduct(ctx context.Context, id string) ([]model.ProductListingUsers, error) {
+	query := `
+
+
+WITH best_selling_products AS (
+    SELECT 
+        pm.name,
+        pm.category,
+        pm.units,
+        pm.tax,
+        pm.amount,
+        pm.status,
+        pm.discount,
+        COALESCE(SUM(oi.quantity), 0) AS total_sold
+    FROM 
+        product_models pm
+    LEFT JOIN 
+        order_items oi ON pm.id = oi.product_id
+    LEFT JOIN 
+        vendor v ON pm.vendor_id = v.id
+      WHERE 
+       v.id = $1  
+    GROUP BY 
+        pm.name, pm.category, pm.units, pm.tax, pm.amount, pm.status, pm.discount
+	HAVING 
+        SUM(oi.quantity) > 0	
+),
+ranked_products AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY total_sold DESC, name) AS rank
+    FROM 
+        best_selling_products
+)
+SELECT 
+    name,
+    category,
+    units,
+    tax,
+    amount,
+    status,
+    discount,
+    total_sold
+FROM 
+    ranked_products
+WHERE 
+    rank <= 10
+ORDER BY
+    rank;
+			 
+ `
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductListingUsers
+	for rows.Next() {
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
 func (r *repository) LatestListing(ctx context.Context, id string) ([]model.ProductList, error) {
 	query := `
 		SELECT 
@@ -846,7 +1011,7 @@ func (r *repository) LatestListing(ctx context.Context, id string) ([]model.Prod
 		FROM 
 			product_models 
 		INNER JOIN 
-			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1 ORDER BY product_models.id DESC;`
+			vendor ON product_models.vendor_id = vendor.id WHERE  vendor.id=$1 ORDER BY product_models.id DESC;`
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
@@ -884,7 +1049,7 @@ func (r *repository) PhighListing(ctx context.Context, id string) ([]model.Produ
 		FROM 
 			product_models 
 		INNER JOIN 
-			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1 ORDER BY product_models.amount DESC;`
+			vendor ON product_models.vendor_id = vendor.id WHERE  vendor.id=$1 ORDER BY product_models.amount DESC;`
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
@@ -922,7 +1087,7 @@ func (r *repository) PlowListing(ctx context.Context, id string) ([]model.Produc
 		FROM 
 			product_models 
 		INNER JOIN 
-			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1 ORDER BY product_models.amount ASC;`
+			vendor ON product_models.vendor_id = vendor.id WHERE  vendor.id=$1 ORDER BY product_models.amount ASC;`
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
@@ -960,7 +1125,7 @@ func (r *repository) InAZListing(ctx context.Context, id string) ([]model.Produc
 		FROM 
 			product_models 
 		INNER JOIN 
-			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1 ORDER BY  LOWER(product_models.name);`
+			vendor ON product_models.vendor_id = vendor.id WHERE  vendor.id=$1 ORDER BY  LOWER(product_models.name);`
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
@@ -998,7 +1163,7 @@ func (r *repository) InZAListing(ctx context.Context, id string) ([]model.Produc
 		FROM 
 			product_models 
 		INNER JOIN 
-			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND vendor.id=$1 ORDER BY  LOWER(product_models.name) DESC;`
+			vendor ON product_models.vendor_id = vendor.id WHERE  vendor.id=$1 ORDER BY  LOWER(product_models.name) DESC;`
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {

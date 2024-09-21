@@ -31,7 +31,15 @@ type Service interface {
 	ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error)
 	PhighListing(ctx context.Context, id string) ([]model.ProductListingUsers, error)
 	CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	//BrandListing
+	BrandListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	BestSellingListingProductCategory(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	BestSellingListingProduct(ctx context.Context) ([]model.ProductListingUsers, error)
 
+	BestSellingListingCategory(ctx context.Context) ([]string, error)
+	BestSellingListingBrand(ctx context.Context) ([]string, error)
+
+	BestSellingListingProductBrand(ctx context.Context, category string) ([]model.ProductListingUsers, error)
 	///orders
 	/// Singlevendor
 	SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReortVendorinAdmin, error)
@@ -197,6 +205,7 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 	var startDate, endDate time.Time
 	var err error
 	var orders []model.ListOrdersAdmin
+	var rangers string
 	if request.Type == "Custom" {
 		startDate, err = time.Parse(dateFormat, request.From)
 		if err != nil {
@@ -211,8 +220,13 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 		if err != nil {
 			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving data")
 		}
+		rangers = request.From + " - " + request.To + " Custom"
 	}
 	if request.Type == "Yearly" {
+		currentTime := time.Now()
+		formattedDate := fmt.Sprintf("01/01/%d - %02d/%02d/%d", currentTime.Year(), currentTime.Day(), currentTime.Month(), currentTime.Year())
+		fmt.Println("Formatted Date:", formattedDate)
+		rangers = formattedDate + " Yearly"
 		orders, err = s.repo.SalesReportOrdersYearly(ctx)
 		if err != nil {
 			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving yearly data: %w", err)
@@ -221,6 +235,18 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 	}
 
 	if request.Type == "Monthly" {
+		currentTime := time.Now()
+
+		formattedDate := fmt.Sprintf("01/%02d/%d - %02d/%02d/%d",
+			currentTime.Month(),
+			currentTime.Year(),
+			currentTime.Day(),
+			currentTime.Month(),
+			currentTime.Year(),
+		)
+
+		fmt.Println("Formatted Date:", formattedDate)
+		rangers = formattedDate + " Monthly"
 		orders, err = s.repo.SalesReportOrdersMonthly(ctx)
 		if err != nil {
 			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving monthly data: %w", err)
@@ -229,6 +255,16 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 	}
 
 	if request.Type == "Weekly" {
+		currentTime := time.Now()
+
+		startOfWeek := currentTime.AddDate(0, 0, -int(currentTime.Weekday()-1))
+
+		formattedDate := fmt.Sprintf("%02d/%02d/%d - %02d/%02d/%d",
+			startOfWeek.Day(), startOfWeek.Month(), startOfWeek.Year(),
+			currentTime.Day(), currentTime.Month(), currentTime.Year())
+
+		fmt.Println("Formatted Date:", formattedDate)
+		rangers = formattedDate + " Weekly"
 		orders, err = s.repo.SalesReportOrdersWeekly(ctx)
 		if err != nil {
 			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving weekly data: %w", err)
@@ -237,6 +273,10 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 	}
 
 	if request.Type == "Daily" {
+		currentTime := time.Now()
+		currentDate := currentTime.Format("2006-01-02")
+		fmt.Println("Current Date:", currentDate)
+		rangers = currentDate + " Daily"
 		orders, err = s.repo.SalesReportOrdersDaily(ctx)
 		if err != nil {
 			return model.SendSalesReortAdmin{}, fmt.Errorf("error in receiving daily data: %w", err)
@@ -245,9 +285,9 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 	}
 	fmt.Println("this is the dattaaaa!!!!!", orders)
 
-	var results []model.ResultsAdminsales
+	var results []model.ResultsAdminsalesReport
 	for _, order := range orders {
-		result := model.ResultsAdminsales{
+		result := model.ResultsAdminsalesReport{
 			Name:     order.Name,
 			Unit:     order.Unit,
 			Amount:   order.Amount,
@@ -257,11 +297,10 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 			Discount: order.Discount,
 			Cmt:      order.CouponAmt,
 			Code:     order.CouponCode,
-			Wmt:      order.WalletAmt,
 		}
 		results = append(results, result)
 	}
-	fmt.Println(results)
+	fmt.Println(results, rangers)
 	// Call repository function
 	salesFacts, err := s.repo.GetSalesFactByDate(ctx, request.Type, startDate, endDate)
 	if err != nil {
@@ -274,10 +313,10 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 	slFact := salesFacts[0]
 	fmt.Println("this is the slFact", slFact)
 	//slFact.TotalSales = slFact.TotalSales * 0.02
-	name, err := s.services.GenerateDailySalesReportExcelAdmin(orders, slFact, request.Type, "")
+	name, err := s.services.GenerateDailySalesReportExcelAdmin(orders, slFact, request.Type, "", rangers)
 	fmt.Println(name, "@@@@@@@", err)
 	excelfurl := "http://localhost:8081/" + name
-	pname, err := s.services.GenerateDailySalesReportPDFAdmin(orders, slFact, request.Type, "AdminPDF")
+	pname, err := s.services.GenerateDailySalesReportPDFAdmin(orders, slFact, request.Type, "AdminPDF", rangers)
 	fmt.Println(pname, "@@@@@@@", err)
 	pdffurl := "http://localhost:8081/" + pname
 
@@ -351,11 +390,11 @@ func (s *service) ListAllOrders(ctx context.Context) ([]model.ListOrdersAdmin, e
 
 func (s *service) SalesReportSinglevendor(ctx context.Context, id string, request model.SalesReport) (model.SendSalesReortVendorinAdmin, error) {
 
-	// Parse dates
 	const dateFormat = "2006-01-02"
 	var startDate, endDate time.Time
 	var err error
 	var orders []model.ListOrdersVendor
+	var rangers string
 	if request.Type == "Custom" {
 		startDate, err = time.Parse(dateFormat, request.From)
 		if err != nil {
@@ -370,8 +409,13 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 		if err != nil {
 			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving data")
 		}
+		rangers = request.From + " - " + request.To + " Custom"
 	}
 	if request.Type == "Yearly" {
+		currentTime := time.Now()
+		formattedDate := fmt.Sprintf("01/01/%d - %02d/%02d/%d", currentTime.Year(), currentTime.Day(), currentTime.Month(), currentTime.Year())
+		fmt.Println("Formatted Date:", formattedDate)
+		rangers = formattedDate + " Yearly"
 		orders, err = s.repo.SalesReportOrdersYearlySinglevendor(ctx, id)
 		if err != nil {
 			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving yearly data: %w", err)
@@ -380,6 +424,18 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	}
 
 	if request.Type == "Monthly" {
+		currentTime := time.Now()
+
+		formattedDate := fmt.Sprintf("01/%02d/%d - %02d/%02d/%d",
+			currentTime.Month(),
+			currentTime.Year(),
+			currentTime.Day(),
+			currentTime.Month(),
+			currentTime.Year(),
+		)
+
+		fmt.Println("Formatted Date:", formattedDate)
+		rangers = formattedDate + " Monthly"
 		orders, err = s.repo.SalesReportOrdersMonthlySinglevendor(ctx, id)
 		if err != nil {
 			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving monthly data: %w", err)
@@ -388,6 +444,16 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	}
 
 	if request.Type == "Weekly" {
+		currentTime := time.Now()
+
+		startOfWeek := currentTime.AddDate(0, 0, -int(currentTime.Weekday()-1))
+
+		formattedDate := fmt.Sprintf("%02d/%02d/%d - %02d/%02d/%d",
+			startOfWeek.Day(), startOfWeek.Month(), startOfWeek.Year(),
+			currentTime.Day(), currentTime.Month(), currentTime.Year())
+
+		fmt.Println("Formatted Date:", formattedDate)
+		rangers = formattedDate + " Weekly"
 		orders, err = s.repo.SalesReportOrdersWeeklySinglevendor(ctx, id)
 		if err != nil {
 			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving weekly data: %w", err)
@@ -396,13 +462,18 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	}
 
 	if request.Type == "Daily" {
+		currentTime := time.Now()
+		currentDate := currentTime.Format("2006-01-02")
+		fmt.Println("Current Date:", currentDate)
+		rangers = currentDate + " Daily"
 		orders, err = s.repo.SalesReportOrdersDailySinglevendor(ctx, id)
 		if err != nil {
 			return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving daily data: %w", err)
 		}
 
 	}
-	fmt.Println("this is the dattaaaa!!!!!", orders)
+
+	fmt.Println("this is the dattaaaa!!!!!", rangers)
 	// Call repository function
 	var results []model.ResultsVendorsales
 	for _, order := range orders {
@@ -416,7 +487,6 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 			Discount: order.Discount,
 			Cmt:      order.CouponAmt,
 			Code:     order.CouponCode,
-			Wmt:      order.WalletAmt,
 		}
 		results = append(results, result)
 	}
@@ -429,10 +499,15 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 		return model.SendSalesReortVendorinAdmin{}, nil
 	}
 	slFact := salesFacts[0]
-	name, err := s.services.GenerateDailySalesReportExcel(orders, slFact, request.Type, "Admin_EXCEL")
+	vdata, err := s.repo.GetVendorDetails(ctx, id)
+	if err != nil {
+		return model.SendSalesReortVendorinAdmin{}, fmt.Errorf("error in receiving yearly data: %w", err)
+	}
+	fmt.Println("listing vdataaaaa!!!", vdata)
+	name, err := s.services.GenerateDailySalesReportExcelAdminside(orders, slFact, request.Type, "Admin_EXCEL", rangers, vdata[0].Name, vdata[0].Email, vdata[0].Gst)
 	fmt.Println(name, "@@@@@@@", err)
 	excelfurl := "http://localhost:8081/" + name
-	pname, err := s.services.GenerateDailySalesReportPDF(orders, slFact, request.Type, "Admin_PDF")
+	pname, err := s.services.GenerateDailySalesReportPDFAdminside(orders, slFact, request.Type, "Admin_PDF", rangers, vdata[0].Name, vdata[0].Email, vdata[0].Gst)
 	fmt.Println(pname, "@@@@@@@", err)
 	pdffurl := "http://localhost:8081/" + pname
 
@@ -502,13 +577,61 @@ func (s *service) ListAllOrdersSinglevendor(ctx context.Context, id string) ([]m
 	return orders, nil
 }
 
-// ///end Singlevendor ending
+// ///end Singlevendor ending BrandListing
 func (s *service) CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 		return s.repo.CategoryListing(ctx, category)
+	}
+}
+func (s *service) BrandListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BrandListing(ctx, category)
+	}
+}
+func (s *service) BestSellingListingProductBrand(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProductBrand(ctx, category)
+	}
+}
+func (s *service) BestSellingListingProductCategory(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProductCategory(ctx, category)
+	}
+}
+func (s *service) BestSellingListingProduct(ctx context.Context) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProduct(ctx)
+	}
+}
+func (s *service) BestSellingListingCategory(ctx context.Context) ([]string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingCategory(ctx)
+	}
+}
+func (s *service) BestSellingListingBrand(ctx context.Context) ([]string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingBrand(ctx)
 	}
 }
 

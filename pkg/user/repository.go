@@ -31,8 +31,16 @@ type Repository interface {
 	GetcartRes(ctx context.Context, id string) ([]model.Cartresponse, error)
 	GetSpecificCart(ctx context.Context, userid string, pis string) (model.Cart, error)
 	///
+	BestSellingListingProduct(ctx context.Context) ([]model.ProductListingUsers, error)
+	BestSellingListingProductCategory(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	//BestSellingListingProductBrand
+	BestSellingListingProductBrand(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+
+	BestSellingListingCategory(ctx context.Context) ([]string, error)
+	BestSellingListingBrand(ctx context.Context) ([]string, error)
 
 	///product listing
+	BrandListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
 	Listing(ctx context.Context) ([]model.ProductListingUsers, error)
 	CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
 	ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error)
@@ -1341,6 +1349,7 @@ func (r *repository) ListingSingle(ctx context.Context, id string) ([]model.Prod
 			vendor.gst AS vendorgst,
 			
 			vendor.id AS vendorid,
+			product_models.brand,
 			product_models.description AS pds
 		FROM 
 			product_models 
@@ -1356,7 +1365,7 @@ func (r *repository) ListingSingle(ctx context.Context, id string) ([]model.Prod
 	var products []model.ProductListDetailed
 	for rows.Next() {
 		var product model.ProductListDetailed
-		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName, &product.Pid, &product.VEmail, &product.VGst, &product.VId, &product.Pds)
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.VendorName, &product.Pid, &product.VEmail, &product.VGst, &product.VId, &product.Brand, &product.Pds)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -1615,4 +1624,381 @@ func (r *repository) InZAListing(ctx context.Context) ([]model.ProductListingUse
 	}
 
 	return products, nil
+}
+func (r *repository) BrandListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	query := `
+		SELECT 
+			product_models.name,
+			product_models.category,
+			product_models.units,
+			product_models.tax,
+			product_models.amount,
+			product_models.status,
+			product_models.discount,
+			
+			 product_models.id AS pid 
+		FROM 
+			product_models 
+		INNER JOIN 
+			vendor ON product_models.vendor_id = vendor.id WHERE product_models.units > 0 AND product_models.brand ILIKE '%' || $1 || '%';`
+
+	rows, err := r.sql.QueryContext(ctx, query, category)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductListingUsers
+	for rows.Next() {
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+
+func (r *repository) BestSellingListingProductCategory(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	query := `
+  		
+	
+	WITH best_selling_products AS (
+    SELECT 
+        pm.name,
+        pm.category,
+        pm.units,
+        pm.tax,
+        pm.amount,
+        pm.status,
+        pm.discount,
+        COALESCE(SUM(oi.quantity), 0) AS total_sold
+    FROM 
+        product_models pm
+    LEFT JOIN 
+        order_items oi ON pm.id = oi.product_id
+    LEFT JOIN 
+        vendor v ON pm.vendor_id = v.id
+    WHERE 
+         pm.category ILIKE '%' || $1 || '%'  -- Partial match with ILIKE
+    GROUP BY 
+        pm.name, pm.category, pm.units, pm.tax, pm.amount, pm.status, pm.discount
+		HAVING 
+        SUM(oi.quantity) > 0
+),
+ranked_products AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY total_sold DESC, name) AS rank
+    FROM 
+        best_selling_products
+)
+SELECT 
+    name,
+    category,
+    units,
+    tax,
+    amount,
+    status,
+    discount,
+    total_sold
+    
+FROM 
+    ranked_products
+WHERE 
+    rank <= 10
+ORDER BY
+    rank;
+			 
+			 
+			 `
+
+	rows, err := r.sql.QueryContext(ctx, query, category)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductListingUsers
+	for rows.Next() {
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+func (r *repository) BestSellingListingProductBrand(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	query := `
+  		
+	
+	WITH best_selling_products AS (
+    SELECT 
+        pm.name,
+        pm.category,
+        pm.units,
+        pm.tax,
+        pm.amount,
+        pm.status,
+        pm.discount,
+        COALESCE(SUM(oi.quantity), 0) AS total_sold
+    FROM 
+        product_models pm
+    LEFT JOIN 
+        order_items oi ON pm.id = oi.product_id
+    LEFT JOIN 
+        vendor v ON pm.vendor_id = v.id
+    WHERE 
+      
+	pm.brand ILIKE '%' || $1 || '%'  -- Partial match with ILIKE
+    GROUP BY 
+        pm.name, pm.category, pm.units, pm.tax, pm.amount, pm.status, pm.discount
+		HAVING 
+        SUM(oi.quantity) > 0
+),
+ranked_products AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY total_sold DESC, name) AS rank
+    FROM 
+        best_selling_products
+)
+SELECT 
+    name,
+    category,
+    units,
+    tax,
+    amount,
+    status,
+    discount,
+    total_sold
+    
+FROM 
+    ranked_products
+WHERE 
+    rank <= 10
+ORDER BY
+    rank;
+			 
+			 
+			 `
+
+	rows, err := r.sql.QueryContext(ctx, query, category)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductListingUsers
+	for rows.Next() {
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+func (r *repository) BestSellingListingProduct(ctx context.Context) ([]model.ProductListingUsers, error) {
+	query := `
+
+
+WITH best_selling_products AS (
+    SELECT 
+        pm.name,
+        pm.category,
+        pm.units,
+        pm.tax,
+        pm.amount,
+        pm.status,
+        pm.discount,
+        COALESCE(SUM(oi.quantity), 0) AS total_sold
+    FROM 
+        product_models pm
+    LEFT JOIN 
+        order_items oi ON pm.id = oi.product_id
+    LEFT JOIN 
+        vendor v ON pm.vendor_id = v.id
+  
+    GROUP BY 
+        pm.name, pm.category, pm.units, pm.tax, pm.amount, pm.status, pm.discount
+		HAVING 
+        SUM(oi.quantity) > 0
+),
+ranked_products AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY total_sold DESC, name) AS rank
+    FROM 
+        best_selling_products
+)
+SELECT 
+    name,
+    category,
+    units,
+    tax,
+    amount,
+    status,
+    discount,
+    total_sold
+FROM 
+    ranked_products
+WHERE 
+    rank <= 10
+ORDER BY
+    rank;
+			 
+ `
+
+	rows, err := r.sql.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var products []model.ProductListingUsers
+	for rows.Next() {
+		var product model.ProductListingUsers
+		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		products = append(products, product)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return products, nil
+}
+
+func (r *repository) BestSellingListingCategory(ctx context.Context) ([]string, error) {
+	query := `
+    WITH best_selling_categories AS (
+        SELECT 
+            pm.category,
+            COALESCE(SUM(oi.quantity), 0) AS total_sold
+        FROM 
+            product_models pm
+        LEFT JOIN 
+            order_items oi ON pm.id = oi.product_id
+        GROUP BY 
+            pm.category
+    ),
+    ranked_categories AS (
+        SELECT
+            category,
+            total_sold,
+            ROW_NUMBER() OVER (ORDER BY total_sold DESC) AS rank
+        FROM 
+            best_selling_categories
+    )
+    SELECT 
+        category
+    FROM 
+        ranked_categories
+    WHERE 
+        rank <= 10
+    ORDER BY
+        rank;
+    `
+
+	rows, err := r.sql.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var category string
+		err := rows.Scan(&category)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		categories = append(categories, category)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return categories, nil
+}
+func (r *repository) BestSellingListingBrand(ctx context.Context) ([]string, error) {
+	query := `
+    WITH best_selling_categories AS (
+        SELECT 
+            pm.brand,
+            COALESCE(SUM(oi.quantity), 0) AS total_sold
+        FROM 
+            product_models pm
+        LEFT JOIN 
+            order_items oi ON pm.id = oi.product_id
+        GROUP BY 
+            pm.brand
+    ),
+    ranked_categories AS (
+        SELECT
+            brand,
+            total_sold,
+            ROW_NUMBER() OVER (ORDER BY total_sold DESC) AS rank
+        FROM 
+            best_selling_categories
+    )
+    SELECT 
+        brand
+    FROM 
+        ranked_categories
+    WHERE 
+        rank <= 10
+    ORDER BY
+        rank;
+    `
+
+	rows, err := r.sql.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute select query: %w", err)
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var category string
+		err := rows.Scan(&category)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		categories = append(categories, category)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return categories, nil
 }

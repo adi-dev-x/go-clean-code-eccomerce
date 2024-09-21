@@ -14,6 +14,7 @@ type Product struct {
 	Status      bool    `json:"status"`
 	Discount    float64 `json:"discount"`
 	Description string  `json:"description"`
+	Brand       string  `json:"brand"`
 }
 type UpdateProduct struct {
 	Unit  float64 `json:"units"`
@@ -59,6 +60,18 @@ type ProductList struct {
 	Status     bool    `json:"status"`
 	Discount   float64 `json:"discount"`
 }
+
+type VendorProductList struct {
+	Name     string  `json:"name"`
+	Category string  `json:"category"`
+	Unit     float64 `json:"units"`
+	Tax      float64 `json:"tax"`
+	Price    float64 `json:"amount"`
+
+	Status    bool    `json:"status"`
+	Discount  float64 `json:"discount"`
+	TotalSold int     `json:"total_sold"`
+}
 type ProductListUsers struct {
 	Name       string  `json:"name"`
 	Category   string  `json:"category"`
@@ -95,6 +108,7 @@ type ProductListDetailed struct {
 	VGst       string  `json:"vendorgst"`
 	VId        string  `json:"vendorid"`
 	Pds        string  `json:"pds"`
+	Brand      string  `json:"brand"`
 }
 
 func (u *Product) Valid() url.Values {

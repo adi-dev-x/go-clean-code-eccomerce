@@ -83,7 +83,7 @@ type SendSalesReort struct {
 	ExcelUrl  string
 }
 type SendSalesReortAdmin struct {
-	Data      []ResultsAdminsales
+	Data      []ResultsAdminsalesReport
 	FactsData Salesfact
 	PdfUrl    string
 	ExcelUrl  string
@@ -105,6 +105,17 @@ type ResultsAdminsales struct {
 	Cmt      float64 `json:"cmt"`
 	Code     string  `json:"code"`
 	Wmt      float64 `json:"wmt"`
+}
+type ResultsAdminsalesReport struct {
+	Name     string  `json:"name"`
+	Unit     int     `json:"unit"`
+	Amount   float64 `json:"amount"`
+	Date     string  `json:"date"`
+	Oid      string  `json:"oid"`
+	VName    string  `json:"vname"`
+	Discount float64 `json:"discount"`
+	Cmt      float64 `json:"cmt"`
+	Code     string  `json:"code"`
 }
 type ResultsVendorsales struct {
 	Name   string  `json:"name"`

@@ -22,6 +22,7 @@ type Service interface {
 	Login(ctx context.Context, request model.UserLoginRequest) error
 	//Product listing
 	Listing(ctx context.Context) ([]model.ProductListingUsers, error)
+	BrandListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
 	CategoryListing(ctx context.Context, category string) ([]model.ProductListingUsers, error)
 	ListingSingle(ctx context.Context, id string) ([]model.ProductListDetailed, error)
 	LatestListing(ctx context.Context) ([]model.ProductListingUsers, error)
@@ -29,7 +30,12 @@ type Service interface {
 	PlowListing(ctx context.Context) ([]model.ProductListingUsers, error)
 	InAZListing(ctx context.Context) ([]model.ProductListingUsers, error)
 	InZAListing(ctx context.Context) ([]model.ProductListingUsers, error)
+	BestSellingListingProductCategory(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	BestSellingListingProductBrand(ctx context.Context, category string) ([]model.ProductListingUsers, error)
+	BestSellingListingProduct(ctx context.Context) ([]model.ProductListingUsers, error)
 
+	BestSellingListingCategory(ctx context.Context) ([]string, error)
+	BestSellingListingBrand(ctx context.Context) ([]string, error)
 	////
 	OtpLogin(ctx context.Context, request model.UserOtp) error
 	UpdateUser(ctx context.Context, updatedData model.UserRegisterRequest) error
@@ -1119,4 +1125,55 @@ func isValidPhoneNumber(phone string) bool {
 	const phoneRegex = `^\+?[1-9]\d{1,14}$` // E.164 international phone number format
 	re := regexp.MustCompile(phoneRegex)
 	return re.MatchString(phone)
+}
+func (s *service) BrandListing(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BrandListing(ctx, category)
+	}
+}
+
+func (s *service) BestSellingListingProductCategory(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProductCategory(ctx, category)
+	}
+}
+
+func (s *service) BestSellingListingProductBrand(ctx context.Context, category string) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProductBrand(ctx, category)
+	}
+}
+func (s *service) BestSellingListingProduct(ctx context.Context) ([]model.ProductListingUsers, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProduct(ctx)
+	}
+}
+
+func (s *service) BestSellingListingCategory(ctx context.Context) ([]string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingCategory(ctx)
+	}
+}
+func (s *service) BestSellingListingBrand(ctx context.Context) ([]string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingBrand(ctx)
+	}
 }

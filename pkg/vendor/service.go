@@ -23,6 +23,8 @@ type Service interface {
 	///product
 	UpdateProduct(ctx context.Context, updatedData model.UpdateProduct, username string) error
 	CategoryListing(ctx context.Context, category string, id string) ([]model.ProductList, error)
+	BestSellingListingProductCategory(ctx context.Context, category string, id string) ([]model.VendorProductList, error)
+	BestSellingListingProduct(ctx context.Context, id string) ([]model.ProductListingUsers, error)
 	LatestListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PhighListing(ctx context.Context, id string) ([]model.ProductList, error)
 	PlowListing(ctx context.Context, id string) ([]model.ProductList, error)
@@ -524,6 +526,26 @@ func (s *service) CategoryListing(ctx context.Context, category string, id strin
 		return nil, ctx.Err()
 	default:
 		return s.repo.CategoryListing(ctx, category, d)
+	}
+}
+func (s *service) BestSellingListingProductCategory(ctx context.Context, category string, id string) ([]model.VendorProductList, error) {
+	d := s.repo.Getid(ctx, id)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProductCategory(ctx, category, d)
+	}
+}
+func (s *service) BestSellingListingProduct(ctx context.Context, id string) ([]model.ProductListingUsers, error) {
+	d := s.repo.Getid(ctx, id)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return s.repo.BestSellingListingProduct(ctx, d)
 	}
 }
 func (s *service) PhighListing(ctx context.Context, id string) ([]model.ProductList, error) {

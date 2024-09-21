@@ -63,12 +63,17 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listing", h.Listing)
 		applicantApi.GET("/Latestlisting", h.LatestListing)
 		applicantApi.POST("/Categorylisting", h.CategoryListing)
+		applicantApi.POST("/Brandlisting", h.BrandListing)
 		applicantApi.GET("/PhighListing", h.PhighListing)
 		applicantApi.GET("/PlowListing", h.PlowListing)
 		applicantApi.GET("/InAZListing", h.InAZListing)
 		applicantApi.GET("/InZAListing", h.InZAListing)
 		applicantApi.POST("/AddTocart", h.AddToCart)
 		applicantApi.POST("/UpdateTocart", h.UpdateToCart)
+
+		applicantApi.GET("/BestSellingListingProduct", h.BestSellingListingProduct)
+		applicantApi.POST("/BestSellingListingProductCategory", h.BestSellingListingProductCategory)
+		applicantApi.POST("/BestSellingListingProductBrand", h.BestSellingListingProductBrand)
 
 		applicantApi.POST("/AddToWish", h.AddToWish)
 		applicantApi.GET("/Listcart/", h.Listcart)
@@ -86,6 +91,9 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listCompletedOrders", h.ListCompletedOrders)
 		applicantApi.GET("/listPendingOrders", h.ListPendingOrders)
 		applicantApi.POST("/returnItem", h.ReturnItem)
+
+		applicantApi.GET("/BestSellingListingCategory", h.BestSellingListingCategory)
+		applicantApi.GET("/BestSellingListingBrand", h.BestSellingListingBrand)
 
 		//// wallet transactions
 		applicantApi.GET("/listAllTransactions", h.ListAllTransactions)
@@ -811,4 +819,92 @@ func (h *Handler) GateFailed(c echo.Context) error {
 	}
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 
+}
+func (h *Handler) BrandListing(c echo.Context) error {
+	ctx := c.Request().Context()
+	type Cat struct {
+		Category string `json:"brand"`
+	}
+	var request Cat
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	if request.Category == "" {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Enter a valid value"})
+	}
+	products, err := h.service.BrandListing(ctx, request.Category)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) BestSellingListingProductCategory(c echo.Context) error {
+	ctx := c.Request().Context()
+	type Cat struct {
+		Category string `json:"category"`
+	}
+	var request Cat
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	if request.Category == "" {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Enter a valid value"})
+	}
+	products, err := h.service.BestSellingListingProductCategory(ctx, request.Category)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) BestSellingListingProductBrand(c echo.Context) error {
+	ctx := c.Request().Context()
+	type Cat struct {
+		Category string `json:"brand"`
+	}
+	var request Cat
+	if err := c.Bind(&request); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
+	if request.Category == "" {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Enter a valid value"})
+	}
+	products, err := h.service.BestSellingListingProductBrand(ctx, request.Category)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) BestSellingListingProduct(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	products, err := h.service.BestSellingListingProduct(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+
+func (h *Handler) BestSellingListingCategory(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	products, err := h.service.BestSellingListingCategory(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
+}
+func (h *Handler) BestSellingListingBrand(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	products, err := h.service.BestSellingListingBrand(ctx)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", products)
+	return h.respondWithData(c, http.StatusOK, "success", products)
 }
