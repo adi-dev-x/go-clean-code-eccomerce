@@ -154,6 +154,7 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostF
 	id := s.repo.Getid(ctx, username)
 	fmt.Println("inside the ReturnItem ", id)
 	p, err := s.repo.GetSingleItem(ctx, id, request.Oid)
+	fmt.Println("this is the ppppp", p)
 
 	if err != nil {
 		return fmt.Errorf("entered is wrong id", err)
@@ -170,6 +171,9 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostF
 
 	if p.Delivery == "Completed" && request.Type == "Cancelled" {
 		return fmt.Errorf("can not cancel returned item")
+	}
+	if p.Delivery == "Pending" && request.Type == "Returned" {
+		return fmt.Errorf("can not return before delivering")
 	}
 
 	switch p.Status {
@@ -212,16 +216,25 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostF
 		if p.Status == "Completed" {
 			fmt.Println("in 1st if")
 			// value := []interface{}{p.Amount, id, "Credit"}
-			f := p.Amount * float64(p.Unit)
+			fmt.Println("this is the serviceee !@!!#!## ---", p.Moid)
+			cmp_r_amt, _ := s.repo.GetcpAmtRefund(ctx, p.Moid)
+			f := p.Amount*float64(p.Unit) - float64(cmp_r_amt)
 			wallet_id, err = s.repo.CreditWallet(ctx, id, f)
+
 			if wallet_id != "" {
 				value := []interface{}{f, wallet_id, "Credit", id}
 				er := s.repo.UpdateWalletTransaction(ctx, value)
 				if er != nil {
 					fmt.Println("there is erorrrr in wallet transaction")
-				}
+					err = er
 
-				fmt.Println("this is workingggg ist")
+				} else {
+					///updateing the mo statussssss
+					s.repo.ChangeCouponRefundStatus(ctx, p.Moid)
+
+				}
+				//ers
+
 			}
 		} else {
 			fmt.Println("in 1st else")
@@ -574,6 +587,9 @@ func (s *service) AddToCheck(ctx context.Context, request model.CheckOut, userna
 
 	} else {
 		w_amt = 0.0
+	}
+	if request.Type == "COD" && amount < 1000 {
+		return model.RZpayment{}, fmt.Errorf("in cash on delivery should be greater than 1000"), nil
 	}
 
 	Camt := (float64(couponAmt) / 100.0) * float64(amount)

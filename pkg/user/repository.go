@@ -103,6 +103,9 @@ type Repository interface {
 	ChangeOrderStatus(ctx context.Context, id string) error
 
 	VerifyOtp(ctx context.Context, email string)
+
+	GetcpAmtRefund(ctx context.Context, oid string) (float32, error)
+	ChangeCouponRefundStatus(ctx context.Context, id string)
 }
 
 type repository struct {
@@ -145,29 +148,22 @@ func (r *repository) ChangeOrderStatus(ctx context.Context, id string) error {
 
 	return nil
 }
+func (r *repository) ChangeCouponRefundStatus(ctx context.Context, id string) {
+	fmt.Println("changing in the order status QQQQ", id)
+	query := `
+	UPDATE orders
+	SET cp_amount_refund_status =true
+	WHERE id = $1
+	
+`
 
-// func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) (model.ListingMainOrders, error) {
-// 	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount,
-// 	                 u.firstname || ' ' || u.lastname AS user,
-// 	                 COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' ||
-// 	                 COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' ||
-// 	                 COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' ||
-// 	                 COALESCE(a.country, '') AS user_ad,
-// 	                 COALESCE(DATE(mo.delivery_date)::text, '') AS delivery_date
-// 			  FROM orders mo
-// 			  JOIN users u ON mo.user_id = u.id
-// 			  JOIN address a ON mo.address_id = a.address_id
-// 			  WHERE u.id=$1 AND mo.uuid=$2`
-// 	var order model.ListingMainOrders
+	_, err := r.sql.ExecContext(ctx, query, id)
 
-// 	err := r.sql.QueryRowContext(ctx, query, userID, orderUid).Scan(&order.OR_id, &order.Delivery_Stat, &order.D_Type, &order.O_status, &order.Amount,
-// 		&order.User, &order.UserAddress, &order.Delivery_date)
-// 	if err != nil {
-// 		return model.ListingMainOrders{}, fmt.Errorf("can't execute query: %w", err)
-// 	}
+	if err != nil {
+		fmt.Errorf("failed to execute update query: %w", err)
+	}
 
-// 	return order, nil
-// }
+}
 
 func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPostForUser, error) {
 	query := `
@@ -263,6 +259,25 @@ func (r *repository) ItemExistsInCart(ctx context.Context, userID string, produc
 
 	return exists == 1, nil
 }
+func (r *repository) GetcpAmtRefund(ctx context.Context, oid string) (float32, error) {
+
+	query := `
+		SELECT COALESCE(coupon_amount, 0.0) 
+		FROM orders 
+		WHERE id = $1 AND cp_amount_refund_status=false;
+	`
+
+	var amount float32
+	err := r.sql.QueryRowContext(ctx, query, oid).Scan(&amount)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0.0, nil
+		}
+		return 0.00, err
+	}
+	fmt.Println("amttt   !!", amount)
+	return amount, nil
+}
 
 // /transaction
 func (r *repository) ListAllTransactions(ctx context.Context, id string) ([]model.UserTransactions, error) {
@@ -327,6 +342,19 @@ func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (
 
 	return Wallet_id, nil
 }
+func (r *repository) UpdateCoupamtRefundStatus(ctx context.Context, id string) {
+	query := `
+	UPDATE orders
+	SET cp_amount_refund_status = true
+	WHERE id = $1
+	RETURNING id;
+`
+	fmt.Println("wallll---", id)
+	var Wallet_id string
+	err := r.sql.QueryRowContext(ctx, query, id).Scan(&Wallet_id)
+	fmt.Println("hey adiii CreditWallet????!!!!!", Wallet_id, "wallet_id !", "id!", id, err)
+
+}
 func (r *repository) UpdateOiStatus(ctx context.Context, id string, ty string) error {
 	fmt.Println("---", id, ty)
 	query := `
@@ -363,13 +391,13 @@ func (r *repository) IncreaseStock(ctx context.Context, id string, unit int) err
 func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error) {
 	var order model.ListAllOrdersCheck
 
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id AS pid, DATE(oi.created_at) AS date,mo.user_id,oi.delivered FROM order_items oi 
+	query := `SELECT p.name, oi.quantity, mo.status, oi.re_cl, oi.price,oi.product_id AS pid, DATE(oi.created_at) AS date,mo.user_id,oi.delivered,mo.id FROM order_items oi 
    JOIN product_models p ON oi.product_id = p.id 
    JOIN orders mo ON oi.order_id = mo.id 
    where oi.user_id=$1 AND oi.id=$2;
    
 `
-	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid, &order.Delivery)
+	err := r.sql.QueryRowContext(ctx, query, id, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid, &order.Delivery, &order.Moid)
 	if err != nil {
 		return model.ListAllOrdersCheck{}, fmt.Errorf("error in exequting query in  GetSingleItem")
 	}
