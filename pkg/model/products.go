@@ -77,7 +77,7 @@ type ProductListUsers struct {
 	Category   string  `json:"category"`
 	Unit       float64 `json:"units"`
 	Tax        float64 `json:"tax"`
-	Price      float64 `json:"amount"`
+	Price      float64 `json:"product_price"`
 	VendorName string  `json:"vendorName"`
 	Status     bool    `json:"status"`
 	Discount   float64 `json:"discount"`
@@ -88,7 +88,7 @@ type ProductListingUsers struct {
 	Category string  `json:"category"`
 	Unit     float64 `json:"units"`
 	Tax      float64 `json:"tax"`
-	Price    float64 `json:"amount"`
+	Price    float64 `json:"product_price"`
 	Status   bool    `json:"status"`
 	Discount float64 `json:"discount"`
 	Pid      string  `json:"pid"`
@@ -99,7 +99,7 @@ type ProductListDetailed struct {
 	Category   string  `json:"category"`
 	Unit       float64 `json:"units"`
 	Tax        float64 `json:"tax"`
-	Price      float64 `json:"amount"`
+	Price      float64 `json:"product_price"`
 	VendorName string  `json:"vendorName"`
 	Status     bool    `json:"status"`
 	Discount   float64 `json:"discount"`

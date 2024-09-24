@@ -5,6 +5,7 @@ import (
 	"fmt"
 	services "myproject/pkg/client"
 	"myproject/pkg/model"
+	"reflect"
 	"sync"
 	"time"
 
@@ -58,7 +59,7 @@ type Service interface {
 	SalesReport(ctx context.Context, request model.SalesReport) (model.SendSalesReortAdmin, error)
 
 	ListMainOrders(ctx context.Context) ([]model.ListingMainOrders, error)
-	UpdateOrderDate(ctx context.Context, id, date string)
+	UpdateOrderDate(ctx context.Context, request model.UpdateOrderAdmin) error
 	ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error
 }
 
@@ -73,9 +74,46 @@ func NewService(repo Repository, services services.Services) Service {
 		services: services,
 	}
 }
-func (s *service) UpdateOrderDate(ctx context.Context, id, date string) {
+func (s *service) UpdateOrderDate(ctx context.Context, request model.UpdateOrderAdmin) error {
 	fmt.Println("updating UpdateOrderDate ")
-	s.repo.UpdateOrderDate(ctx, id, date)
+	var delivery bool
+	var deliverydate string
+	data, err := s.repo.GetOrderForUpdating(ctx, request.Oid)
+	R_D_Pay_st, _ := data["status"].(string)
+	R_D_Deli_st, _ := data["delivered"].(bool)
+	R_D_Deli_date, _ := data["delivery_date"].(string)
+
+	fmt.Println("Type of x:", reflect.TypeOf(R_D_Pay_st))
+
+	if err != nil {
+		return err
+	}
+	fmt.Println("d", data["payment_method"])
+
+	if data["payment_method"] == "ONLINE" && request.Payment_status != "" {
+		return fmt.Errorf("Can not change payment status of Online payment")
+
+	}
+	if request.Payment_status == "" {
+		request.Payment_status = R_D_Pay_st
+	}
+	if request.Delivery_Stat == "" {
+		delivery = R_D_Deli_st
+	} else if request.Delivery_Stat == "Deliverd" {
+		delivery = true
+	} else {
+		delivery = false
+
+	}
+	if request.Delivery_date == "" {
+		deliverydate = R_D_Deli_date
+	} else {
+		deliverydate = request.Delivery_date
+
+	}
+	s.repo.UpdateOrderFromAdminUP(ctx, request.Oid, deliverydate, request.Payment_status, delivery)
+
+	return nil
 }
 func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost, username string) error {
 

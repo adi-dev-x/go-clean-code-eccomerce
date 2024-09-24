@@ -97,44 +97,43 @@ type SendSalesReortVendorinAdmin struct {
 type ResultsAdminsales struct {
 	Name     string  `json:"name"`
 	Unit     int     `json:"unit"`
-	Amount   float64 `json:"amount"`
+	Amount   float64 `json:"Product_price"`
 	Date     string  `json:"date"`
 	Oid      string  `json:"oid"`
-	VName    string  `json:"vname"`
+	VName    string  `json:"vendor_name"`
 	Discount float64 `json:"discount"`
-	Cmt      float64 `json:"cmt"`
-	Code     string  `json:"code"`
-	Wmt      float64 `json:"wmt"`
+	Cmt      float64 `json:"Coupon_Amount"`
+	Code     string  `json:"Coupon_code"`
+	Wmt      float64 `json:"wallet_amount"`
 }
 type ResultsAdminsalesReport struct {
 	Name     string  `json:"name"`
 	Unit     int     `json:"unit"`
-	Amount   float64 `json:"amount"`
+	Amount   float64 `json:"Total_Amount"`
 	Date     string  `json:"date"`
 	Oid      string  `json:"oid"`
-	VName    string  `json:"vname"`
+	VName    string  `json:"vendor_name"`
 	Discount float64 `json:"discount"`
-	Cmt      float64 `json:"cmt"`
+	Cmt      float64 `json:"Coupon_Amount"`
 	Code     string  `json:"code"`
 }
 type ResultsVendorsales struct {
 	Name   string  `json:"name"`
 	Unit   int     `json:"unit"`
-	Amount float64 `json:"amount"`
+	Amount float64 `json:"Total_amount"`
 	Date   string  `json:"date"`
-	Oid    string  `json:"oid"`
+	Oid    string  `json:"order_id"`
 
 	Discount float64 `json:"discount"`
-	Cmt      float64 `json:"cmt"`
+	Cmt      float64 `json:"coupon_Amount"`
 	Code     string  `json:"code"`
-	Wmt      float64 `json:"wmt"`
 }
 type ListOrdersVendor struct {
 	Name       string  `json:"name"`
 	Unit       int     `json:"unit"`
 	Status     string  `json:"status"`
 	Returned   bool    `json:"returned"`
-	Amount     float64 `json:"amount"`
+	Amount     float64 `json:"Product_price"`
 	Pid        string  `json:"pid"`
 	Date       string  `json:"date"`
 	User       string  `json:"user"`
@@ -142,23 +141,23 @@ type ListOrdersVendor struct {
 	ListDate   string  `json:"checks"`
 	Oid        string  `json:"oid"`
 	Discount   float64 `json:"discount"`
-	CouponAmt  float64 `json:"cmt"`
-	CouponCode string  `json:"code"`
-	WalletAmt  float64 `json:"wmt"`
+	CouponAmt  float64 `json:"coupon_amount"`
+	CouponCode string  `json:"coupon_code"`
+	WalletAmt  float64 `json:"wallet_amount"`
 }
 type ListOrdersAdmin struct {
 	Name       string  `json:"name"`
 	Unit       int     `json:"unit"`
 	Status     string  `json:"status"`
 	Returned   bool    `json:"returned"`
-	Amount     float64 `json:"amount"`
+	Amount     float64 `json:"Product_price"`
 	Pid        string  `json:"pid"`
 	Date       string  `json:"date"`
 	User       string  `json:"user"`
 	Add        string  `json:"user_ad"`
 	ListDate   string  `json:"checks"`
 	Oid        string  `json:"oid"`
-	VName      string  `json:"vname"`
+	VName      string  `json:"vendorname"`
 	Discount   float64 `json:"discount"`
 	CouponAmt  float64 `json:"cmt"`
 	CouponCode string  `json:"code"`
@@ -229,4 +228,43 @@ type ListingUserMainOrders struct {
 	Cmt           float64 `json:"cmt"`
 	Code          string  `json:"code"`
 	Wmt           float64 `json:"wmt"`
+}
+
+type UpdateOrderAdmin struct {
+	Oid            string `json:"oid"`
+	Delivery_date  string `json:"delivery_date"`
+	Payment_status string `json:"payment_status"`
+	Delivery_Stat  string `json:"delivered"`
+}
+
+func (s *UpdateOrderAdmin) Valid() (err url.Values) {
+	err = url.Values{}
+	if s.Oid == "" {
+		err.Add("order id", "it should not be nil")
+
+	}
+	if s.Delivery_date != "" {
+		const dateFormat = "2006-01-02"
+		Date, DErr := time.Parse(dateFormat, s.Delivery_date)
+		if DErr != nil {
+			err.Add("From", "From date should be in the format YYYY-MM-DD")
+		} else {
+			currentDate := time.Now().Truncate(24 * time.Hour)
+
+			// Compare delivery date with the current date
+			if Date.Before(currentDate) {
+				err.Add("Delivery_date", "Delivery date should not be before the current date")
+			}
+		}
+
+	}
+	if !(s.Delivery_Stat == "Delivered" || s.Delivery_Stat == "Not Delivered" || s.Delivery_Stat == "") {
+		err.Add("Wrong format of Delivery status", " Delivery status should be in Delivered, Not Delivered or Blank")
+	}
+	if !(s.Payment_status == "Pending" || s.Payment_status == "Completed" || s.Payment_status == "Failed" || s.Payment_status == "") {
+		err.Add("Wrong format of Payment status", " Payment status should be in Pending Completed Failed or Blank")
+	}
+
+	return err
+
 }

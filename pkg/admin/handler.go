@@ -113,34 +113,20 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 }
 func (h *Handler) UpdateOrder(c echo.Context) error {
 	fmt.Println("this is in the handler UpdateOrder")
-	type Request struct {
-		Date string `json:"date`
-		Oid  string `json:"oid`
-	}
-	var request Request
+
+	var request model.UpdateOrderAdmin
 	if err := c.Bind(&request); err != nil {
 		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
 	}
-	const dateFormat = "2006-01-02"
-	parsedDate, fromErr := time.Parse(dateFormat, request.Date)
-	if fromErr != nil {
-		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": "correct date format"})
-	}
-
-	// Get today's date (formatted to YYYY-MM-DD to ignore time)
-	today := time.Now().Truncate(24 * time.Hour)
-	fmt.Println("11", today, parsedDate)
-	// Check if the parsed date is before today
-	if parsedDate.After(today) {
-		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": "should be greater than today"})
-	}
-
-	if request.Oid == "" {
-		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": "Give order id"})
-
+	errValues := request.Valid()
+	if len(errValues) > 0 {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]interface{}{"invalid-request": errValues})
 	}
 	ctx := c.Request().Context()
-	h.service.UpdateOrderDate(ctx, request.Oid, request.Date)
+	err := h.service.UpdateOrderDate(ctx, request)
+	if err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"request-parse": err.Error()})
+	}
 
 	return h.respondWithData(c, http.StatusOK, "success", nil)
 }

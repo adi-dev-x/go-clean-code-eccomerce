@@ -21,7 +21,7 @@ func InitRedis() error {
 	for i := 0; i < MaxRetries; i++ {
 		Client = redis.NewClient(&redis.Options{
 			Network:  "tcp",
-			Addr:     "localhost:6379",
+			Addr:     "redis:6379",
 			Password: "", // no password set
 			DB:       0,  // use default DB
 		})

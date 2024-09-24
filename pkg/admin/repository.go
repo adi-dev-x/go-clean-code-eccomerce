@@ -79,9 +79,11 @@ type Repository interface {
 
 	UpdateWalletTransaction(ctx context.Context, value interface{}) error
 
-	UpdateOrderDate(ctx context.Context, id, date string)
+	UpdateOrderFromAdminUP(ctx context.Context, id, date, payment string, dStatus bool)
 
 	GetVendorDetails(ctx context.Context, id string) ([]model.GetingVeDetails, error)
+
+	GetOrderForUpdating(ctx context.Context, id string) (map[string]interface{}, error)
 }
 
 type repository struct {
@@ -92,6 +94,30 @@ func NewRepository(sqlDB *sql.DB) Repository {
 	return &repository{
 		sql: sqlDB,
 	}
+}
+func (r *repository) GetOrderForUpdating(ctx context.Context, id string) (map[string]interface{}, error) {
+	var delivery bool
+	var payment string
+	var payment_method string
+	var delivery_date string
+
+	query := `  select status,delivered,payment_method,delivery_date from
+	             orders WHERE uuid=$1
+	
+	
+	`
+	err := r.sql.QueryRowContext(ctx, query, id).Scan(&payment, &delivery, &payment_method, &delivery_date)
+	if err != nil {
+		return nil, fmt.Errorf("there is error in insertion")
+	}
+	data := make(map[string]interface{})
+	data["status"] = payment
+	data["delivered"] = delivery
+	data["payment_method"] = payment_method
+	data["delivery_date"] = delivery_date
+
+	return data, nil
+
 }
 func (r *repository) GetVendorDetails(ctx context.Context, id string) ([]model.GetingVeDetails, error) {
 
@@ -121,15 +147,15 @@ func (r *repository) GetVendorDetails(ctx context.Context, id string) ([]model.G
 	return vdatas, nil
 
 }
-func (r *repository) UpdateOrderDate(ctx context.Context, id, date string) {
+func (r *repository) UpdateOrderFromAdminUP(ctx context.Context, id, date, payment string, dStatus bool) {
 	fmt.Println("updatingggg ---UpdateOrderDate", id, date)
 	query := `
 	UPDATE orders
-	SET delivery_date =$1
-	WHERE uuid = $2
+	SET delivery_date =$1,status=$2,delivered=$3
+	WHERE uuid = $4
 	`
 
-	_, err := r.sql.ExecContext(ctx, query, date, id)
+	_, err := r.sql.ExecContext(ctx, query, date, payment, dStatus, id)
 
 	if err != nil {
 		fmt.Errorf("failed to execute update query: %w", err)
@@ -402,9 +428,12 @@ func (r *repository) SalesReportOrdersDaily(ctx context.Context) ([]model.ListOr
 	query := `SELECT EXTRACT(DAY FROM oi.created_at) AS checks, p.name, oi.quantity, mo.status, oi.returned, oi.price * 
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
-	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad ,DATE(oi.created_at) AS date,v.name AS vname ,mo.uuid AS oid,(oi.discount * oi.quantity) AS discount,mo.coupon_amount AS cmt,COALESCE(c.code , '') ,mo.wallet_money AS wmt 
-	FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
+	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') 
+	|| ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
+	AS user_ad ,DATE(oi.created_at) AS date,v.name AS vendorname ,mo.uuid AS oid,(oi.discount * oi.quantity) AS discount,
+	mo.coupon_amount AS cmt,COALESCE(c.code , '') ,mo.wallet_money AS wmt 
+	FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id
+	 JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
 	LEFT JOIN coupon c ON mo.cid =c.id
 	WHERE DATE(oi.created_at) = DATE(CURRENT_DATE) AND  mo.status = 'Completed' AND oi.returned=false ORDER BY checks;
 `
@@ -438,7 +467,7 @@ func (r *repository) SalesReportOrdersWeekly(ctx context.Context) ([]model.ListO
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
 	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad ,DATE(oi.created_at) AS date,v.name AS vname,mo.uuid AS oid, (oi.discount * oi.quantity) AS discount,mo.coupon_amount AS cmt,COALESCE(c.code , '') ,mo.wallet_money AS wmt 
+	AS user_ad ,DATE(oi.created_at) AS date,v.name AS vendorname,mo.uuid AS oid, (oi.discount * oi.quantity) AS discount,mo.coupon_amount AS cmt,COALESCE(c.code , '') ,mo.wallet_money AS wmt 
 	 FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
 	LEFT  JOIN coupon c ON mo.cid =c.id
 	 WHERE mo.status = 'Completed' AND oi.returned=false AND EXTRACT(WEEK FROM oi.created_at) = EXTRACT(WEEK FROM CURRENT_DATE)  ORDER BY checks;
@@ -473,7 +502,7 @@ func (r *repository) SalesReportOrdersMonthly(ctx context.Context) ([]model.List
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
 	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad, DATE(oi.created_at) AS date,v.name AS vname
+	AS user_ad, DATE(oi.created_at) AS date,v.name AS vendorname
 	
 	,mo.uuid AS oid  , (oi.discount * oi.quantity) AS discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
 
@@ -512,7 +541,7 @@ func (r *repository) SalesReportOrdersCustom(ctx context.Context, startDate, end
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
     COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad,
-	v.name AS vname,mo.uuid AS oid , (oi.discount * oi.quantity) AS discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
+	v.name AS vendorname,mo.uuid AS oid , (oi.discount * oi.quantity) AS discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
     JOIN vendor v ON p.vendor_id = v.id 
@@ -551,7 +580,7 @@ func (r *repository) SalesReportOrdersYearly(ctx context.Context) ([]model.ListO
 	oi.quantity AS total_price, 
 	oi.product_id AS pid, u.firstname || ' ' || u.lastname AS user, 
 	COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' || COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') 
-	AS user_ad ,DATE(oi.created_at) AS date,v.name AS vname,
+	AS user_ad ,DATE(oi.created_at) AS date,v.name AS vendorname,
 	 mo.uuid AS oid , (oi.discount * oi.quantity) AS discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
 	FROM order_items oi JOIN product_models p ON oi.product_id = p.id JOIN vendor v ON p.vendor_id = v.id JOIN orders mo ON oi.order_id = mo.id JOIN users u ON mo.user_id = u.id JOIN address a ON mo.address_id = a.address_id 
 	LEFT JOIN coupon c ON mo.cid =c.id
@@ -1085,7 +1114,7 @@ func (r *repository) ListPendingOrders(ctx context.Context) ([]model.ListOrdersA
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
     COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad,
-	v.name AS vname 
+	v.name AS vendorname 
 	,mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
@@ -1125,7 +1154,7 @@ func (r *repository) ListCompletedOrders(ctx context.Context) ([]model.ListOrder
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
     COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad,
-	v.name AS vname 
+	v.name AS vendorname 
 	,mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
@@ -1165,7 +1194,7 @@ func (r *repository) ListFailedOrders(ctx context.Context) ([]model.ListOrdersAd
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
     COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad,
-	v.name AS vname 
+	v.name AS vendorname 
 		,mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
@@ -1205,7 +1234,7 @@ func (r *repository) ListReturnedOrders(ctx context.Context) ([]model.ListOrders
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
     COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad,
-	v.name AS vname 
+	v.name AS vendorname 
 	,mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
@@ -1245,7 +1274,7 @@ func (r *repository) ListAllOrders(ctx context.Context) ([]model.ListOrdersAdmin
     DATE(oi.created_at) AS date, u.firstname || ' ' || u.lastname AS user, 
     COALESCE(a.address1, '') || ' ' || COALESCE(a.address2, '') || ' ' || COALESCE(a.address3, '') || ' ' ||
     COALESCE(a.city, '') || ' ' || COALESCE(a.state, '') || ' ' || COALESCE(a.pin, '') || ' ' || COALESCE(a.country, '') AS user_ad, 
-     oi.id AS oid,v.name AS vname,mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
+     oi.id AS oid,v.name AS vendorname,mo.uuid AS oid  , oi.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
     FROM order_items oi 
     JOIN product_models p ON oi.product_id = p.id 
     JOIN vendor v ON p.vendor_id = v.id 
