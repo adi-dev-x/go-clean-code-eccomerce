@@ -360,10 +360,10 @@ func (s *service) SalesReport(ctx context.Context, request model.SalesReport) (m
 	//slFact.TotalSales = slFact.TotalSales * 0.02
 	name, err := s.services.GenerateDailySalesReportExcelAdmin(orders, slFact, request.Type, "", rangers)
 	fmt.Println(name, "@@@@@@@", err)
-	excelfurl := "http://localhost:8081/" + name
+	excelfurl := "https://adiecom.gitfunswokhu.in/view/" + name
 	pname, err := s.services.GenerateDailySalesReportPDFAdmin(orders, slFact, request.Type, "AdminPDF", rangers)
 	fmt.Println(pname, "@@@@@@@", err)
-	pdffurl := "http://localhost:8081/" + pname
+	pdffurl := "https://adiecom.gitfunswokhu.in/view/" + pname
 
 	fmt.Println(excelfurl, "  --  ", pdffurl)
 	var data model.SendSalesReortAdmin
@@ -551,10 +551,10 @@ func (s *service) SalesReportSinglevendor(ctx context.Context, id string, reques
 	fmt.Println("listing vdataaaaa!!!", vdata)
 	name, err := s.services.GenerateDailySalesReportExcelAdminside(orders, slFact, request.Type, "Admin_EXCEL", rangers, vdata[0].Name, vdata[0].Email, vdata[0].Gst)
 	fmt.Println(name, "@@@@@@@", err)
-	excelfurl := "http://localhost:8081/" + name
+	excelfurl := "https://adiecom.gitfunswokhu.in/view/" + name
 	pname, err := s.services.GenerateDailySalesReportPDFAdminside(orders, slFact, request.Type, "Admin_PDF", rangers, vdata[0].Name, vdata[0].Email, vdata[0].Gst)
 	fmt.Println(pname, "@@@@@@@", err)
-	pdffurl := "http://localhost:8081/" + pname
+	pdffurl := "https://adiecom.gitfunswokhu.in/view/" + pname
 
 	fmt.Println(excelfurl, "  --  ", pdffurl)
 	var data model.SendSalesReortVendorinAdmin
