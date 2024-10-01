@@ -212,10 +212,11 @@ func (h *Handler) ListPendingOrders(c echo.Context) error {
 			Oid:      order.Oid,
 			VName:    order.VName,
 			Discount: order.Discount,
-			Cmt:      order.CouponAmt,
-			Code:     order.CouponCode,
-			Wmt:      order.WalletAmt,
+			// Cmt:      order.CouponAmt,
+			// Code:     order.CouponCode,
+			Wmt: order.WalletAmt,
 		}
+		result.Payable()
 		results = append(results, result)
 	}
 	fmt.Println(results)
@@ -242,10 +243,11 @@ func (h *Handler) ListCompletedOrders(c echo.Context) error {
 			Oid:      order.Oid,
 			VName:    order.VName,
 			Discount: order.Discount,
-			Cmt:      order.CouponAmt,
-			Code:     order.CouponCode,
-			Wmt:      order.WalletAmt,
+			// Cmt:      order.CouponAmt,
+			// Code:     order.CouponCode,
+			Wmt: order.WalletAmt,
 		}
+		result.Payable()
 		results = append(results, result)
 	}
 	fmt.Println(results)
@@ -272,10 +274,11 @@ func (h *Handler) ListFailedOrders(c echo.Context) error {
 			Oid:      order.Oid,
 			VName:    order.VName,
 			Discount: order.Discount,
-			Cmt:      order.CouponAmt,
-			Code:     order.CouponCode,
-			Wmt:      order.WalletAmt,
+			// Cmt:      order.CouponAmt,
+			// Code:     order.CouponCode,
+			Wmt: order.WalletAmt,
 		}
+		result.Payable()
 		results = append(results, result)
 	}
 	fmt.Println(results)
@@ -302,10 +305,11 @@ func (h *Handler) ListReturnedOrders(c echo.Context) error {
 			Oid:      order.Oid,
 			VName:    order.VName,
 			Discount: order.Discount,
-			Cmt:      order.CouponAmt,
-			Code:     order.CouponCode,
-			Wmt:      order.WalletAmt,
+			// Cmt:      order.CouponAmt,
+			// Code:     order.CouponCode,
+			Wmt: order.WalletAmt,
 		}
+		result.Payable()
 		results = append(results, result)
 	}
 	fmt.Println(results)
@@ -331,10 +335,11 @@ func (h *Handler) ListAllOrders(c echo.Context) error {
 			Oid:      order.Oid,
 			VName:    order.VName,
 			Discount: order.Discount,
-			Cmt:      order.CouponAmt,
-			Code:     order.CouponCode,
-			Wmt:      order.WalletAmt,
+			// Cmt:      order.CouponAmt,
+			// Code:     order.CouponCode,
+			Wmt: order.WalletAmt,
 		}
+		result.Payable()
 		results = append(results, result)
 	}
 	fmt.Println(results)

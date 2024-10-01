@@ -84,6 +84,9 @@ type Repository interface {
 	GetVendorDetails(ctx context.Context, id string) ([]model.GetingVeDetails, error)
 
 	GetOrderForUpdating(ctx context.Context, id string) (map[string]interface{}, error)
+
+	GetcpAmtRefund(ctx context.Context, oid string) (float32, error)
+	ChangeCouponRefundStatus(ctx context.Context, id string)
 }
 
 type repository struct {
@@ -173,6 +176,7 @@ func (r *repository) UpdateWalletTransaction(ctx context.Context, value interfac
 	id := values[1]
 	Type := values[2]
 	usid := values[3]
+	des := values[4]
 	fmt.Println("this is the UpdateWalletTransaction in repo!!@@@@@", reflect.TypeOf(Amt), "____", Amt, "!!", id, "##", Type)
 	query := `
 	INSERT INTO wallet_transactions (
@@ -180,21 +184,38 @@ func (r *repository) UpdateWalletTransaction(ctx context.Context, value interfac
 		amount,
 		transaction_type,
 		user_id,
+		description,
 		created_at
 		
 	) VALUES (
-		$1, $2, $3,$4, CURRENT_TIMESTAMP
+		$1, $2, $3,$4,$5, CURRENT_TIMESTAMP
 	) RETURNING id;
 `
 	var tid string
 	fmt.Println("this is the id ", tid, "user_id,", usid)
 
-	err := r.sql.QueryRowContext(ctx, query, id, Amt, Type, usid).Scan(&tid)
+	err := r.sql.QueryRowContext(ctx, query, id, Amt, Type, usid, des).Scan(&tid)
 	if err != nil {
 		return fmt.Errorf("there is error in insertion")
 	}
 
 	return nil
+
+}
+func (r *repository) ChangeCouponRefundStatus(ctx context.Context, id string) {
+	fmt.Println("changing in the order status QQQQ", id)
+	query := `
+	UPDATE orders
+	SET cp_amount_refund_status =true
+	WHERE uuid = $1
+	
+`
+
+	_, err := r.sql.ExecContext(ctx, query, id)
+
+	if err != nil {
+		fmt.Errorf("failed to execute update query: %w", err)
+	}
 
 }
 func (r *repository) CreditWallet(ctx context.Context, id string, amt float64) (string, error) {
@@ -247,17 +268,36 @@ func (r *repository) IncreaseStock(ctx context.Context, id string, unit int) err
 	return nil
 
 }
+func (r *repository) GetcpAmtRefund(ctx context.Context, oid string) (float32, error) {
+
+	query := `
+		SELECT COALESCE(coupon_amount, 0.0) 
+		FROM orders 
+		WHERE uuid = $1 AND cp_amount_refund_status=false;
+	`
+
+	var amount float32
+	err := r.sql.QueryRowContext(ctx, query, oid).Scan(&amount)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0.0, nil
+		}
+		return 0.00, err
+	}
+	fmt.Println("amttt   !!", amount)
+	return amount, nil
+}
 func (r *repository) GetSingleItem(ctx context.Context, oid string) (model.ListAllOrdersCheck, error) {
 	var order model.ListAllOrdersCheck
 
 	query := `SELECT p.name,  oi.quantity,   mo.status, oi.returned, 
-    oi.price,oi.product_id AS pid,DATE(oi.created_at) AS date,mo.user_id ,v.id AS vid,u.email AS usmail,mo.id AS mid
+    oi.price,oi.product_id AS pid,DATE(oi.created_at) AS date,mo.user_id ,v.id AS vid,u.email AS usmail,mo.uuid AS mid
      FROM order_items oi 
     JOIN  product_models p ON oi.product_id = p.id 
     JOIN  orders mo ON oi.order_id = mo.id 
     JOIN  vendor v ON p.vendor_id = v.id 
 	JOIN  users  u ON oi.user_id=u.id
-    WHERE  oi.id = $2;
+    WHERE  oi.id = $1;
   
 `
 	err := r.sql.QueryRowContext(ctx, query, oid).Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Usid, &order.Vid, &order.Usmail, &order.Moid)
@@ -278,7 +318,7 @@ func (r *repository) PrintingUserMainOrder(ctx context.Context) ([]model.Listing
 			  FROM orders mo
 			  JOIN users u ON mo.user_id = u.id 
 			  LEFT JOIN coupon c ON mo.cid =c.id
-			  JOIN address a ON mo.address_id = a.address_id
+			  JOIN address a ON mo.address_id = a.address_id ORDER BY mo.id DESC
 			  `
 	var orders []model.ListingMainOrders
 
@@ -1338,8 +1378,8 @@ func (r *repository) BrandListing(ctx context.Context, category string) ([]model
 		err := rows.Scan(&product.Name, &product.Category, &product.Unit, &product.Tax, &product.Price, &product.Status, &product.Discount, &product.Pid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		} ///  https://adiecom.gitfunswokhu.in
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1379,7 +1419,7 @@ func (r *repository) CategoryListing(ctx context.Context, category string) ([]mo
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1457,7 +1497,7 @@ ORDER BY
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/admin/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/admin/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1535,7 +1575,7 @@ ORDER BY
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1609,7 +1649,7 @@ ORDER BY
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1757,7 +1797,7 @@ func (r *repository) ProductListing(ctx context.Context) ([]model.ProductListing
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/admin/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/admin/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1936,7 +1976,7 @@ func (r *repository) PhighListing(ctx context.Context) ([]model.ProductListingUs
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1976,7 +2016,7 @@ func (r *repository) PlowListing(ctx context.Context) ([]model.ProductListingUse
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -2016,7 +2056,7 @@ func (r *repository) InAZListing(ctx context.Context) ([]model.ProductListingUse
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -2056,7 +2096,7 @@ func (r *repository) InZAListing(ctx context.Context) ([]model.ProductListingUse
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 

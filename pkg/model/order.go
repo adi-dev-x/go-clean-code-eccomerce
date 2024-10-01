@@ -15,16 +15,26 @@ type ListAllOrders struct {
 	Date     string  `json:"date"`
 }
 type ListAllOrdersUsers struct {
-	Name     string  `json:"name"`
-	Unit     int     `json:"unit"`
-	Status   string  `json:"status"`
-	Returned bool    `json:"returned"`
-	Amount   float64 `json:"amount"`
-	Pid      string  `json:"pid"`
-	Date     string  `json:"date"`
-	Oid      string  `json:"oid"`
-	Discount float64 `json:"discount"`
+	Name            string  `json:"name"`
+	Unit            int     `json:"unit"`
+	Status          string  `json:"payment_status"`
+	Returned        bool    `json:"returned/cancelled"`
+	Amount          float64 `json:"amount"`
+	Pid             string  `json:"product_id"`
+	Date            string  `json:"date"`
+	Oid             string  `json:"order_id"`
+	Discount        float64 `json:"discount"`
+	Moid            string  `json:"main_order_collection_id"`
+	Payable_Amt     float64 `json:"payable_amount"`
+	Delivery_status bool    `json:"delivery_status"`
+	Delivery_Date   string  `json:"delivery_date"`
 }
+
+func (s *ListAllOrdersUsers) Payable() {
+	s.Payable_Amt = (s.Amount - s.Discount) * float64(s.Unit)
+
+}
+
 type ListAllOrdersCheck struct {
 	Name     string  `json:"name"`
 	Unit     int     `json:"unit"`
@@ -99,13 +109,22 @@ type ResultsAdminsales struct {
 	Unit     int     `json:"unit"`
 	Amount   float64 `json:"Product_price"`
 	Date     string  `json:"date"`
-	Oid      string  `json:"oid"`
+	Oid      string  `json:"Collection_order_id"`
 	VName    string  `json:"vendor_name"`
 	Discount float64 `json:"discount"`
-	Cmt      float64 `json:"Coupon_Amount"`
-	Code     string  `json:"Coupon_code"`
-	Wmt      float64 `json:"wallet_amount"`
+	SOid     string  `json:"order_id"`
+
+	// Cmt         float64 `json:"Coupon_Amount_Total_order"`
+	// Code        string  `json:"Coupon_code"`
+	Wmt         float64 `json:"wallet_amount"`
+	Payable_Amt float64 `json:"payable_amount"`
 }
+
+func (s *ResultsAdminsales) Payable() {
+	s.Payable_Amt = (s.Amount - s.Discount) * float64(s.Unit)
+
+}
+
 type ResultsAdminsalesReport struct {
 	Name     string  `json:"name"`
 	Unit     int     `json:"unit"`
@@ -228,6 +247,7 @@ type ListingUserMainOrders struct {
 	Cmt           float64 `json:"cmt"`
 	Code          string  `json:"code"`
 	Wmt           float64 `json:"wmt"`
+	Order_Date    string  `json:"order_date"`
 }
 
 type UpdateOrderAdmin struct {

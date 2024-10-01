@@ -86,7 +86,9 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listCoupon", h.ActiveListing)
 		///list orders
 		applicantApi.GET("/listAllOrders", h.ListAllOrders)
+		applicantApi.GET("/listSingleCollectionOrders", h.listSingleCollectionOrders)
 		applicantApi.GET("/listReturnedOrders", h.ListReturnedOrders)
+		applicantApi.GET("/listCancelledOrders", h.ListCancelledOrders)
 		applicantApi.GET("/listFailedOrders", h.ListFailedOrders)
 		applicantApi.GET("/listCompletedOrders", h.ListCompletedOrders)
 		applicantApi.GET("/listPendingOrders", h.ListPendingOrders)
@@ -104,6 +106,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.GET("/listOrders", h.ListMainOrders)
 		//cancel order
 		applicantApi.POST("/CancelMainOrders", h.CancelMainOrders)
+		applicantApi.POST("/GetOrdersCollections", h.GetMainOrders)
 
 	}
 
@@ -163,6 +166,27 @@ func (h *Handler) CancelMainOrders(c echo.Context) error {
 	}
 
 	return h.respondWithData(c, http.StatusOK, "success", nil)
+}
+func (h *Handler) GetMainOrders(c echo.Context) error {
+	fmt.Println("in activeeee")
+	type request struct {
+		Orderuid string `json:"ouid"`
+	}
+	var req request
+	if err := c.Bind(&req); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"parsing err": err.Error()})
+	}
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+
+	or, err := h.service.GetMainOrders(ctx, username, req.Orderuid)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+
+	return h.respondWithData(c, http.StatusOK, "success", or)
 }
 func (h *Handler) ListMainOrders(c echo.Context) error {
 	fmt.Println("in activeeee")
@@ -413,6 +437,20 @@ func (h *Handler) ListAllOrders(c echo.Context) error {
 
 	return h.respondWithData(c, http.StatusOK, "success", orders)
 }
+func (h *Handler) listSingleCollectionOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	orders, err := h.service.ListAllOrders(ctx, username)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
 func (h *Handler) ListFailedOrders(c echo.Context) error {
 	fmt.Println("this is in the handler ListAllOrders")
 	authHeader := c.Request().Header.Get("Authorization")
@@ -433,7 +471,21 @@ func (h *Handler) ListReturnedOrders(c echo.Context) error {
 	fmt.Println("inside the cart list ", authHeader)
 	username := c.Get("username").(string)
 	ctx := c.Request().Context()
-	orders, err := h.service.ListReturnedOrders(ctx, username)
+	orders, err := h.service.ListReturnedOrders(ctx, username, "Returned")
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
+	}
+	fmt.Println("this is the data ", orders)
+
+	return h.respondWithData(c, http.StatusOK, "success", orders)
+}
+func (h *Handler) ListCancelledOrders(c echo.Context) error {
+	fmt.Println("this is in the handler ListAllOrders")
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+	orders, err := h.service.ListReturnedOrders(ctx, username, "Cancelled")
 	if err != nil {
 		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch orders", "details": err.Error()})
 	}
@@ -728,7 +780,7 @@ func (h *Handler) AddToCheck(c echo.Context) error {
 	if rz.Amt != 0 {
 		authHeader := c.Request().Header.Get("Authorization")
 		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
-		url := fmt.Sprintf("http://localhost:8080/RazorPay/%s/", tokenString)
+		url := fmt.Sprintf("https://adiecom.gitfunswokhu.in/RazorPay/%s/", tokenString)
 		f := username + "RZ"
 		dam, _ := json.Marshal(&rz)
 		db.SetRedis(f, dam, time.Minute*5)

@@ -22,7 +22,7 @@ func NewServerHttp(userHandler user.Handler, vendorHandler vendor.Handler, admin
 	// Mount vendor routes
 	vendorHandler.MountRoutes(engine)
 	adminHandler.MountRoutes(engine)
-
+	//return &ServerHttp{Engine: engine}
 	return &ServerHttp{engine}
 }
 

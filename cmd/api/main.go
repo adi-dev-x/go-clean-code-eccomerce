@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"os"
 
 	"log"
@@ -32,6 +33,8 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to initialize the files")
 	}
+	// fileServer := http.FileServer(http.Dir("./"))
+	// server.Engine.GET("/*", echo.WrapHandler(fileServer))
 
 	server.Start(conf)
 }

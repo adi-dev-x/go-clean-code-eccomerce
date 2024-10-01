@@ -56,10 +56,10 @@ type Service interface {
 	PaymentFailed(ctx context.Context, rz model.RZpayment, username string) error
 	//list orders
 	ListAllOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error)
-	ListReturnedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
-	ListFailedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
-	ListCompletedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
-	ListPendingOrders(ctx context.Context, username string) ([]model.ListAllOrders, error)
+	ListReturnedOrders(ctx context.Context, username string, status string) ([]model.ListAllOrdersUsers, error)
+	ListFailedOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error)
+	ListCompletedOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error)
+	ListPendingOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error)
 	ReturnItem(ctx context.Context, request model.ReturnOrderPostForUser, username string) error
 
 	ListAllTransactions(ctx context.Context, username string) ([]model.UserTransactions, error)
@@ -68,6 +68,7 @@ type Service interface {
 	/// list main orders
 	ListMainOrders(ctx context.Context, username string) ([]model.ListingUserMainOrders, error)
 	CancelMainOrders(ctx context.Context, username string, orderUid string) error
+	GetMainOrders(ctx context.Context, username string, orderUid string) ([]model.ListAllOrdersUsers, error)
 	VerifyOtp(ctx context.Context, email string)
 }
 type service struct {
@@ -84,6 +85,20 @@ func NewService(repo Repository, services services.Services) Service {
 }
 func (s *service) VerifyOtp(ctx context.Context, email string) {
 	s.repo.VerifyOtp(ctx, email)
+
+}
+func (s *service) GetMainOrders(ctx context.Context, username string, orderUid string) ([]model.ListAllOrdersUsers, error) {
+
+	id := s.repo.Getid(ctx, username)
+	/// check if order id is valid
+
+	orders, err := s.repo.PrintingUserSingleMainOrderCollection(ctx, id, orderUid)
+	fmt.Println(orders)
+	if err != nil {
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in retriving data")
+	}
+
+	return orders, nil
 
 }
 func (s *service) CancelMainOrders(ctx context.Context, username string, orderUid string) error {
@@ -218,11 +233,14 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPostF
 			// value := []interface{}{p.Amount, id, "Credit"}
 			fmt.Println("this is the serviceee !@!!#!## ---", p.Moid)
 			cmp_r_amt, _ := s.repo.GetcpAmtRefund(ctx, p.Moid)
+			fmt.Println("this is the amount !!!", p.Amount, "c ppp amtt", cmp_r_amt)
 			f := p.Amount*float64(p.Unit) - float64(cmp_r_amt)
 			wallet_id, err = s.repo.CreditWallet(ctx, id, f)
+			fmt.Println("wallletttt---", wallet_id)
 
 			if wallet_id != "" {
-				value := []interface{}{f, wallet_id, "Credit", id}
+				value := []interface{}{f, wallet_id, "Credit", id, p.Moid}
+				fmt.Println("pppp,", p.Moid, "--", value)
 				er := s.repo.UpdateWalletTransaction(ctx, value)
 				if er != nil {
 					fmt.Println("there is erorrrr in wallet transaction")
@@ -280,42 +298,42 @@ func (s *service) ListAllOrders(ctx context.Context, username string) ([]model.L
 
 	return orders, nil
 }
-func (s *service) ListReturnedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error) {
+func (s *service) ListReturnedOrders(ctx context.Context, username string, status string) ([]model.ListAllOrdersUsers, error) {
 	id := s.repo.Getid(ctx, username)
 	fmt.Println("inside the ListAllOrders ", id)
-	orders, err := s.repo.ListReturnedOrders(ctx, id)
+	orders, err := s.repo.ListReturnedOrders(ctx, id, status)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("this is the error for listing all orders", err)
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("this is the error for listing all orders", err)
 	}
 
 	return orders, nil
 }
-func (s *service) ListFailedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error) {
+func (s *service) ListFailedOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error) {
 	id := s.repo.Getid(ctx, username)
-	fmt.Println("inside the ListAllOrders ", id)
+	fmt.Println("inside the ListAllOrdersUsers ", id)
 	orders, err := s.repo.ListFailedOrders(ctx, id)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("this is the error for listing all orders", err)
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("this is the error for listing all orders", err)
 	}
 
 	return orders, nil
 }
-func (s *service) ListCompletedOrders(ctx context.Context, username string) ([]model.ListAllOrders, error) {
+func (s *service) ListCompletedOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error) {
 	id := s.repo.Getid(ctx, username)
-	fmt.Println("inside the ListAllOrders ", id)
+	fmt.Println("inside the ListAllOrdersUsers ", id)
 	orders, err := s.repo.ListCompletedOrders(ctx, id)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("this is the error for listing all orders", err)
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("this is the error for listing all orders", err)
 	}
 
 	return orders, nil
 }
-func (s *service) ListPendingOrders(ctx context.Context, username string) ([]model.ListAllOrders, error) {
+func (s *service) ListPendingOrders(ctx context.Context, username string) ([]model.ListAllOrdersUsers, error) {
 	id := s.repo.Getid(ctx, username)
-	fmt.Println("inside the ListAllOrders ", id)
+	fmt.Println("inside the ListAllOrdersUsers ", id)
 	orders, err := s.repo.ListPendingOrders(ctx, id)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("this is the error for listing all orders", err)
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("this is the error for listing all orders", err)
 	}
 
 	return orders, nil

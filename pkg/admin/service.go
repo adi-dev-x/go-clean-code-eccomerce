@@ -173,14 +173,21 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 		var wallet_id string
 		if p.Status == "Completed" {
 			fmt.Println("in 1st if")
-			f := p.Amount * float64(p.Unit)
+			//f := p.Amount * float64(p.Unit)
 			// value := []interface{}{p.Amount, id, "Credit"}
+			cmp_r_amt, _ := s.repo.GetcpAmtRefund(ctx, p.Moid)
+			fmt.Println("---", cmp_r_amt)
+			f := p.Amount*float64(p.Unit) - float64(cmp_r_amt)
 			wallet_id, err = s.repo.CreditWallet(ctx, p.Usid, f)
 			if wallet_id != "" {
-				value := []interface{}{f, wallet_id, "Credit", p.Usid}
+				value := []interface{}{f, wallet_id, "Credit", p.Usid, p.Moid}
 				er := s.repo.UpdateWalletTransaction(ctx, value)
 				if er != nil {
 					fmt.Println("there is erorrrr in wallet transaction")
+				} else {
+					///updateing the mo statussssss
+					s.repo.ChangeCouponRefundStatus(ctx, p.Moid)
+
 				}
 
 				fmt.Println("this is workingggg ist")

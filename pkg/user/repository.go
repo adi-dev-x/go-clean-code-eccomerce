@@ -76,10 +76,10 @@ type Repository interface {
 	DeleteSingleCart(ctx context.Context, id string, pid string) error
 	///orderss
 	ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error)
-	ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
-	ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
-	ListCompletedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
-	ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrders, error)
+	ListReturnedOrders(ctx context.Context, id, status string) ([]model.ListAllOrdersUsers, error)
+	ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error)
+	ListCompletedOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error)
+	ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error)
 	GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error)
 	IncreaseStock(ctx context.Context, id string, unit int) error
 	UpdateOiStatus(ctx context.Context, id string, typ string) error
@@ -99,7 +99,7 @@ type Repository interface {
 	PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingUserMainOrders, error)
 	//PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) (model.ListingMainOrders, error)
 	PrintingUserSingleMainOrder(ctx context.Context, userID string, orderUid string) ([]model.ReturnOrderPostForUser, error)
-
+	PrintingUserSingleMainOrderCollection(ctx context.Context, userID string, orderUid string) ([]model.ListAllOrdersUsers, error)
 	ChangeOrderStatus(ctx context.Context, id string) error
 
 	VerifyOtp(ctx context.Context, email string)
@@ -153,7 +153,7 @@ func (r *repository) ChangeCouponRefundStatus(ctx context.Context, id string) {
 	query := `
 	UPDATE orders
 	SET cp_amount_refund_status =true
-	WHERE id = $1
+	WHERE uuid = $1
 	
 `
 
@@ -204,16 +204,44 @@ func (r *repository) PrintingUserSingleMainOrder(ctx context.Context, userID str
 
 	return orderItemIDs, nil
 }
+func (r *repository) PrintingUserSingleMainOrderCollection(ctx context.Context, id string, orderUid string) ([]model.ListAllOrdersUsers, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid,oi.discount,mo.uuid,mo.delivered,mo.delivery_date FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1 AND mo.uuid=$2 ORDER BY oi.id DESC;
+`
+	var orders []model.ListAllOrdersUsers
 
+	rows, err := r.sql.QueryContext(ctx, query, id, orderUid)
+	if err != nil {
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrdersUsers
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount, &order.Moid, &order.Delivery_status, &order.Delivery_Date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		order.Payable()
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
+}
 func (r *repository) PrintingUserMainOrder(ctx context.Context, userID string) ([]model.ListingUserMainOrders, error) {
 	query := `SELECT mo.uuid, mo.delivered, mo.payment_method, mo.status, mo.payable_amount, 
 	                 mo.delivery_date,
 			        mo.discount,mo.coupon_amount AS cmt,COALESCE(c.code , ''),mo.wallet_money AS wmt 
-					 FROM orders mo
+					 ,mo.order_date FROM orders mo
 			  JOIN users u ON mo.user_id = u.id 
 			  JOIN address a ON mo.address_id = a.address_id
 			  LEFT JOIN coupon c ON mo.cid =c.id
-			  WHERE u.id=$1`
+			  WHERE u.id=$1 ORDER BY mo.id DESC`
 	var orders []model.ListingUserMainOrders
 
 	rows, err := r.sql.QueryContext(ctx, query, userID)
@@ -225,7 +253,7 @@ func (r *repository) PrintingUserMainOrder(ctx context.Context, userID string) (
 	for rows.Next() {
 		var order model.ListingUserMainOrders
 		err := rows.Scan(&order.OR_id, &order.Delivery_Stat, &order.D_Type, &order.O_status, &order.Amount,
-			&order.Delivery_date, &order.Discount, &order.Cmt, &order.Code, &order.Wmt)
+			&order.Delivery_date, &order.Discount, &order.Cmt, &order.Code, &order.Wmt, &order.Order_Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -264,7 +292,7 @@ func (r *repository) GetcpAmtRefund(ctx context.Context, oid string) (float32, e
 	query := `
 		SELECT COALESCE(coupon_amount, 0.0) 
 		FROM orders 
-		WHERE id = $1 AND cp_amount_refund_status=false;
+		WHERE uuid = $1 AND cp_amount_refund_status=false;
 	`
 
 	var amount float32
@@ -281,7 +309,7 @@ func (r *repository) GetcpAmtRefund(ctx context.Context, oid string) (float32, e
 
 // /transaction
 func (r *repository) ListAllTransactions(ctx context.Context, id string) ([]model.UserTransactions, error) {
-	query := `select id,amount,transaction_type from wallet_transactions where user_id=$1`
+	query := `select id,amount,transaction_type,COALESCE(description , '') from wallet_transactions where user_id=$1`
 	var transactions []model.UserTransactions
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
@@ -292,7 +320,7 @@ func (r *repository) ListAllTransactions(ctx context.Context, id string) ([]mode
 	defer rows.Close()
 	for rows.Next() {
 		var transaction model.UserTransactions
-		err := rows.Scan(&transaction.Id, &transaction.Amount, &transaction.Type)
+		err := rows.Scan(&transaction.Id, &transaction.Amount, &transaction.Type, &transaction.Des)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -303,7 +331,7 @@ func (r *repository) ListAllTransactions(ctx context.Context, id string) ([]mode
 
 }
 func (r *repository) ListTypeTransactions(ctx context.Context, id string, typ string) ([]model.UserTransactions, error) {
-	query := `select id,amount,transaction_type from wallet_transactions where user_id=$1 AND transaction_type=$2`
+	query := `select id,amount,transaction_type,COALESCE(description , '') from wallet_transactions where user_id=$1 AND transaction_type=$2`
 	var transactions []model.UserTransactions
 
 	rows, err := r.sql.QueryContext(ctx, query, id, typ)
@@ -314,7 +342,7 @@ func (r *repository) ListTypeTransactions(ctx context.Context, id string, typ st
 	defer rows.Close()
 	for rows.Next() {
 		var transaction model.UserTransactions
-		err := rows.Scan(&transaction.Id, &transaction.Amount, &transaction.Type)
+		err := rows.Scan(&transaction.Id, &transaction.Amount, &transaction.Type, &transaction.Des)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -391,7 +419,7 @@ func (r *repository) IncreaseStock(ctx context.Context, id string, unit int) err
 func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (model.ListAllOrdersCheck, error) {
 	var order model.ListAllOrdersCheck
 
-	query := `SELECT p.name, oi.quantity, mo.status, oi.re_cl, oi.price,oi.product_id AS pid, DATE(oi.created_at) AS date,mo.user_id,oi.delivered,mo.id FROM order_items oi 
+	query := `SELECT p.name, oi.quantity, mo.status, oi.re_cl, (oi.price-oi.discount) AS price,oi.product_id AS pid, DATE(oi.created_at) AS date,mo.user_id,oi.delivered,mo.uuid FROM order_items oi 
    JOIN product_models p ON oi.product_id = p.id 
    JOIN orders mo ON oi.order_id = mo.id 
    where oi.user_id=$1 AND oi.id=$2;
@@ -404,7 +432,7 @@ func (r *repository) GetSingleItem(ctx context.Context, id string, oid string) (
 	return order, nil
 }
 func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error) {
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid,oi.discount FROM order_items oi 
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid,oi.discount,mo.uuid,mo.delivered,mo.delivery_date FROM order_items oi 
 	JOIN product_models p ON oi.product_id = p.id 
 	JOIN orders mo ON oi.order_id = mo.id 
 	where oi.user_id=$1 ORDER BY oi.id DESC;
@@ -418,7 +446,65 @@ func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.List
 	defer rows.Close()
 	for rows.Next() {
 		var order model.ListAllOrdersUsers
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount)
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount, &order.Moid, &order.Delivery_status, &order.Delivery_Date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		order.Payable()
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
+}
+func (r *repository) ListReturnedOrders(ctx context.Context, id, status string) ([]model.ListAllOrdersUsers, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid,oi.discount,mo.uuid,mo.delivered,mo.delivery_date FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1 AND oi.re_cl=$2 ORDER BY oi.id DESC;
+`
+	var orders []model.ListAllOrdersUsers
+
+	rows, err := r.sql.QueryContext(ctx, query, id, status)
+	if err != nil {
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrdersUsers
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount, &order.Moid, &order.Delivery_status, &order.Delivery_Date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		order.Payable()
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+	return orders, nil
+
+}
+func (r *repository) ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid,oi.discount,mo.uuid,mo.delivered,mo.delivery_date FROM order_items oi 
+	JOIN product_models p ON oi.product_id = p.id 
+	JOIN orders mo ON oi.order_id = mo.id 
+	where oi.user_id=$1 AND mo.status='Failed' ORDER BY oi.id DESC;
+`
+	var orders []model.ListAllOrdersUsers
+
+	rows, err := r.sql.QueryContext(ctx, query, id)
+	if err != nil {
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in exequting query in ListAllOrdersUsers ")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var order model.ListAllOrdersUsers
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount, &order.Moid, &order.Delivery_status, &order.Delivery_Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -431,22 +517,22 @@ func (r *repository) ListAllOrders(ctx context.Context, id string) ([]model.List
 	return orders, nil
 
 }
-func (r *repository) ListReturnedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date FROM order_items oi 
+func (r *repository) ListCompletedOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id,oi.discount,mo.uuid,mo.delivered,mo.delivery_date FROM order_items oi 
 	JOIN product_models p ON oi.product_id = p.id 
 	JOIN orders mo ON oi.order_id = mo.id 
-	where oi.user_id=$1 AND oi.returned=true;
+	where oi.user_id=$1 AND mo.status='Completed' ORDER BY oi.id DESC;
 `
-	var orders []model.ListAllOrders
+	var orders []model.ListAllOrdersUsers
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in exequting query in ListAllOrdersUsers ")
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var order model.ListAllOrders
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date)
+		var order model.ListAllOrdersUsers
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount, &order.Moid, &order.Delivery_status, &order.Delivery_Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -459,78 +545,22 @@ func (r *repository) ListReturnedOrders(ctx context.Context, id string) ([]model
 	return orders, nil
 
 }
-func (r *repository) ListFailedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date FROM order_items oi 
+func (r *repository) ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrdersUsers, error) {
+	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date,oi.id AS oid,oi.discount,mo.uuid,mo.delivered,mo.delivery_date FROM order_items oi 
 	JOIN product_models p ON oi.product_id = p.id 
 	JOIN orders mo ON oi.order_id = mo.id 
-	where oi.user_id=$1 AND mo.status='Failed';
+	where oi.user_id=$1 AND mo.status='Pending' ORDER BY oi.id DESC;
 `
-	var orders []model.ListAllOrders
+	var orders []model.ListAllOrdersUsers
 
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in exequting query in ListAllOrdersUsers ")
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var order model.ListAllOrders
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-		orders = append(orders, order)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over rows: %w", err)
-	}
-	return orders, nil
-
-}
-func (r *repository) ListCompletedOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price,oi.product_id, DATE(oi.created_at) AS date FROM order_items oi 
-	JOIN product_models p ON oi.product_id = p.id 
-	JOIN orders mo ON oi.order_id = mo.id 
-	where oi.user_id=$1 AND mo.status='Completed';
-`
-	var orders []model.ListAllOrders
-
-	rows, err := r.sql.QueryContext(ctx, query, id)
-	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var order model.ListAllOrders
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-		orders = append(orders, order)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over rows: %w", err)
-	}
-	return orders, nil
-
-}
-func (r *repository) ListPendingOrders(ctx context.Context, id string) ([]model.ListAllOrders, error) {
-	query := `SELECT p.name, oi.quantity, mo.status, oi.returned, oi.price ,oi.product_id , DATE(oi.created_at) AS date FROM order_items oi 
-	JOIN product_models p ON oi.product_id = p.id 
-	JOIN orders mo ON oi.order_id = mo.id 
-	where oi.user_id=$1 AND mo.status='Pending';
-`
-	var orders []model.ListAllOrders
-
-	rows, err := r.sql.QueryContext(ctx, query, id)
-	if err != nil {
-		return []model.ListAllOrders{}, fmt.Errorf("error in exequting query in ListAllOrders ")
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var order model.ListAllOrders
-		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date)
+		var order model.ListAllOrdersUsers
+		err := rows.Scan(&order.Name, &order.Unit, &order.Status, &order.Returned, &order.Amount, &order.Pid, &order.Date, &order.Oid, &order.Discount, &order.Moid, &order.Delivery_status, &order.Delivery_Date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -631,24 +661,27 @@ func (r *repository) UpdateWalletTransaction(ctx context.Context, value interfac
 	id := values[1]
 	Type := values[2]
 	usid := values[3]
-	fmt.Println("this is the UpdateWalletTransaction in repo!!@@@@@", reflect.TypeOf(Amt), "____", Amt, "!!", id, "##", Type)
+	des := values[4]
+	fmt.Println("this is the UpdateWalletTransaction in repo!!@@@@@", reflect.TypeOf(Amt), "____", Amt, "!!", id, "##", Type, "---", des)
 	query := `
 	INSERT INTO wallet_transactions (
 		wallet_id,
 		amount,
 		transaction_type,
 		user_id,
+		description,
 		created_at
 		
 	) VALUES (
-		$1, $2, $3,$4, CURRENT_TIMESTAMP
+		$1, $2, $3,$4,$5,CURRENT_TIMESTAMP
 	) RETURNING id;
 `
 	var tid string
 	fmt.Println("this is the id ", tid, "user_id,", usid)
 
-	err := r.sql.QueryRowContext(ctx, query, id, Amt, Type, usid).Scan(&tid)
+	err := r.sql.QueryRowContext(ctx, query, id, Amt, Type, usid, des).Scan(&tid)
 	if err != nil {
+		fmt.Println("this is the errorrrr", err)
 		return fmt.Errorf("there is error in insertion")
 	}
 
@@ -946,7 +979,7 @@ func (r *repository) GetcartRes(ctx context.Context, id string) ([]model.Cartres
 }
 func (r *repository) GetcartAmt(ctx context.Context, id string) int {
 	total := 0
-	query := `SELECT SUM(c.unit * p.amount - p.discount) AS total_sum 
+	query := `SELECT SUM(c.unit * (p.amount - p.discount)) AS total_sum 
 	          FROM cart c 
 	          JOIN product_models p ON c.product_id = p.id 
 	          JOIN users u ON c.user_id = u.id 
@@ -968,7 +1001,7 @@ func (r *repository) GetcartAmt(ctx context.Context, id string) int {
 }
 func (r *repository) GetcartDis(ctx context.Context, id string) int {
 	total := 0
-	query := `SELECT SUM(p.discount) AS total_sum 
+	query := `SELECT SUM(p.discount*c.unit) AS total_sum 
 	          FROM cart c 
 	          JOIN product_models p ON c.product_id = p.id 
 	          JOIN users u ON c.user_id = u.id 
@@ -1311,7 +1344,7 @@ func (r *repository) Listing(ctx context.Context) ([]model.ProductListingUsers, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1351,7 +1384,7 @@ func (r *repository) CategoryListing(ctx context.Context, category string) ([]mo
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1483,7 +1516,7 @@ func (r *repository) LatestListing(ctx context.Context) ([]model.ProductListingU
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1523,7 +1556,7 @@ func (r *repository) PhighListing(ctx context.Context) ([]model.ProductListingUs
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1563,7 +1596,7 @@ func (r *repository) PlowListing(ctx context.Context) ([]model.ProductListingUse
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1603,7 +1636,7 @@ func (r *repository) InAZListing(ctx context.Context) ([]model.ProductListingUse
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1643,7 +1676,7 @@ func (r *repository) InZAListing(ctx context.Context) ([]model.ProductListingUse
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1683,7 +1716,7 @@ func (r *repository) BrandListing(ctx context.Context, category string) ([]model
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1761,7 +1794,7 @@ ORDER BY
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1839,7 +1872,7 @@ ORDER BY
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
@@ -1913,7 +1946,7 @@ ORDER BY
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/user/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 

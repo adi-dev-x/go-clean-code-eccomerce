@@ -987,7 +987,7 @@ ORDER BY
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		product.Pdetail = "http://localhost:8080/user/listingSingleProduct/" + product.Pid
+		product.Pdetail = "https://adiecom.gitfunswokhu.in/vendor/listingSingleProduct/" + product.Pid
 		products = append(products, product)
 	}
 
