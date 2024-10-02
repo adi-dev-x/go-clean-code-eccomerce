@@ -135,7 +135,7 @@
                 document.getElementById('success-message').style.display = 'block'; // Show success message
                 
                 alert('Payment successful: ' + response.razorpay_payment_id);
-                const apiURL = `http://localhost:8080/RazorPaySucess/${UserToken}/`;
+                const apiURL = `https://adiecom.gitfunswokhu.in/RazorPaySucess/${UserToken}/`;
                 console.log("this is the api url ##   ", apiURL);
 
                 fetch(apiURL)
@@ -168,7 +168,7 @@
                 document.getElementById('success-payment-id').textContent = response.razorpay_payment_id;
                 document.getElementById('success-amount-paid').textContent = totalAmount;
                 document.getElementById('failed-message').style.display = 'block';
-                const apiURL = `http://localhost:8080/RazorPayFailed/${UserToken}/`;
+                const apiURL = `https://adiecom.gitfunswokhu.in/RazorPayFailed/${UserToken}/`;
                 console.log("this is the api url ##   ", apiURL);
 
                 fetch(apiURL)
