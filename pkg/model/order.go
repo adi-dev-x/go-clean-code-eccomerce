@@ -104,26 +104,6 @@ type SendSalesReortVendorinAdmin struct {
 	PdfUrl    string
 	ExcelUrl  string
 }
-type ResultsAdminsales struct {
-	Name     string  `json:"name"`
-	Unit     int     `json:"unit"`
-	Amount   float64 `json:"Product_price"`
-	Date     string  `json:"date"`
-	Oid      string  `json:"Collection_order_id"`
-	VName    string  `json:"vendor_name"`
-	Discount float64 `json:"discount"`
-	SOid     string  `json:"order_id"`
-
-	// Cmt         float64 `json:"Coupon_Amount_Total_order"`
-	// Code        string  `json:"Coupon_code"`
-	Wmt         float64 `json:"wallet_amount"`
-	Payable_Amt float64 `json:"payable_amount"`
-}
-
-func (s *ResultsAdminsales) Payable() {
-	s.Payable_Amt = (s.Amount - s.Discount) * float64(s.Unit)
-
-}
 
 type ResultsAdminsalesReport struct {
 	Name     string  `json:"name"`
@@ -165,23 +145,48 @@ type ListOrdersVendor struct {
 	WalletAmt  float64 `json:"wallet_amount"`
 }
 type ListOrdersAdmin struct {
-	Name       string  `json:"name"`
-	Unit       int     `json:"unit"`
-	Status     string  `json:"status"`
-	Returned   bool    `json:"returned"`
-	Amount     float64 `json:"Product_price"`
-	Pid        string  `json:"pid"`
-	Date       string  `json:"date"`
-	User       string  `json:"user"`
-	Add        string  `json:"user_ad"`
-	ListDate   string  `json:"checks"`
-	Oid        string  `json:"oid"`
-	VName      string  `json:"vendorname"`
-	Discount   float64 `json:"discount"`
-	CouponAmt  float64 `json:"cmt"`
-	CouponCode string  `json:"code"`
-	WalletAmt  float64 `json:"wmt"`
+	Name            string  `json:"name"`
+	Unit            int     `json:"unit"`
+	Status          string  `json:"status"`
+	Returned        bool    `json:"returned"`
+	Amount          float64 `json:"Product_price"`
+	Pid             string  `json:"pid"`
+	Date            string  `json:"date"`
+	User            string  `json:"user"`
+	Add             string  `json:"user_ad"`
+	ListDate        string  `json:"checks"`
+	Oid             string  `json:"oid"`
+	VName           string  `json:"vendorname"`
+	Discount        float64 `json:"discount"`
+	CouponAmt       float64 `json:"cmt"`
+	CouponCode      string  `json:"code"`
+	WalletAmt       float64 `json:"wmt"`
+	Order_item_id   string  `json:"order_item_id"`
+	Delivery_date   string  `json:"delivery_date"`
+	Delivery_status bool    `json:"delivery_status"`
 }
+type ResultsAdminsales struct {
+	Name     string  `json:"name"`
+	Unit     int     `json:"unit"`
+	Amount   float64 `json:"Product_price"`
+	Date     string  `json:"date"`
+	Oid      string  `json:"Collection_order_id"`
+	VName    string  `json:"vendor_name"`
+	Discount float64 `json:"discount"`
+	// SOid     string  `json:"order_id"`
+	Payment_status  string  `json:"payment_status"`
+	Order_item_id   string  `json:"order_item_id"`
+	Delivery_date   string  `json:"delivery_date"`
+	Delivery_status bool    `json:"delivery_status"`
+	Wmt             float64 `json:"wallet_amount"`
+	Payable_Amt     float64 `json:"payable_amount"`
+}
+
+func (s *ResultsAdminsales) Payable() {
+	s.Payable_Amt = (s.Amount - s.Discount) * float64(s.Unit)
+
+}
+
 type SalesReport struct {
 	Type string `json:"type"`
 	Usid string
@@ -226,7 +231,7 @@ type ListingMainOrders struct {
 	OR_id         string  `json:"id"`
 	Delivery_Stat bool    `json:"delivered"`
 	D_Type        string  `json:"payment_method"`
-	O_status      string  `json:"status"`
+	O_status      string  `json:"payment_status"`
 	Amount        float64 `json:"payable_amount"`
 	User          string  `json:"user"`
 	UserAddress   string  `json:"user_address"`
@@ -235,6 +240,7 @@ type ListingMainOrders struct {
 	Cmt           float64 `json:"cmt"`
 	Code          string  `json:"code"`
 	Wmt           float64 `json:"wmt"`
+	Order_date    string  `json:"order_date"`
 }
 type ListingUserMainOrders struct {
 	OR_id         string  `json:"id"`

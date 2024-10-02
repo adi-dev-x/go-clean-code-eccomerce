@@ -92,6 +92,7 @@ func (h *Handler) MountRoutes(engine *echo.Echo) {
 		applicantApi.POST("/cancelItem", h.CancelItem)
 
 		applicantApi.POST("/UpdateOrder", h.UpdateOrder)
+		applicantApi.POST("/GetOrdersCollections", h.GetMainOrders)
 
 	}
 }
@@ -110,6 +111,27 @@ func (h *Handler) respondWithData(c echo.Context, code int, message interface{},
 		"data": data,
 	}
 	return c.JSON(code, resp)
+}
+func (h *Handler) GetMainOrders(c echo.Context) error {
+	fmt.Println("in activeeee")
+	type request struct {
+		Orderuid string `json:"ouid"`
+	}
+	var req request
+	if err := c.Bind(&req); err != nil {
+		return h.respondWithError(c, http.StatusBadRequest, map[string]string{"parsing err": err.Error()})
+	}
+	authHeader := c.Request().Header.Get("Authorization")
+	fmt.Println("inside the cart list ", authHeader)
+	username := c.Get("username").(string)
+	ctx := c.Request().Context()
+
+	or, err := h.service.GetMainOrders(ctx, username, req.Orderuid)
+	if err != nil {
+		return h.respondWithError(c, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch products", "details": err.Error()})
+	}
+
+	return h.respondWithData(c, http.StatusOK, "success", or)
 }
 func (h *Handler) UpdateOrder(c echo.Context) error {
 	fmt.Println("this is in the handler UpdateOrder")
@@ -205,16 +227,20 @@ func (h *Handler) ListPendingOrders(c echo.Context) error {
 	var results []model.ResultsAdminsales
 	for _, order := range orders {
 		result := model.ResultsAdminsales{
-			Name:     order.Name,
-			Unit:     order.Unit,
-			Amount:   order.Amount,
-			Date:     order.Date,
-			Oid:      order.Oid,
-			VName:    order.VName,
-			Discount: order.Discount,
+			Name:            order.Name,
+			Unit:            order.Unit,
+			Amount:          order.Amount,
+			Date:            order.Date,
+			Oid:             order.Oid,
+			VName:           order.VName,
+			Discount:        order.Discount,
+			Order_item_id:   order.Order_item_id,
+			Delivery_date:   order.Delivery_date,
+			Delivery_status: order.Delivery_status,
 			// Cmt:      order.CouponAmt,
 			// Code:     order.CouponCode,
-			Wmt: order.WalletAmt,
+			Payment_status: order.Status,
+			Wmt:            order.WalletAmt,
 		}
 		result.Payable()
 		results = append(results, result)
@@ -236,16 +262,20 @@ func (h *Handler) ListCompletedOrders(c echo.Context) error {
 	var results []model.ResultsAdminsales
 	for _, order := range orders {
 		result := model.ResultsAdminsales{
-			Name:     order.Name,
-			Unit:     order.Unit,
-			Amount:   order.Amount,
-			Date:     order.Date,
-			Oid:      order.Oid,
-			VName:    order.VName,
-			Discount: order.Discount,
+			Name:            order.Name,
+			Unit:            order.Unit,
+			Amount:          order.Amount,
+			Date:            order.Date,
+			Oid:             order.Oid,
+			VName:           order.VName,
+			Discount:        order.Discount,
+			Order_item_id:   order.Order_item_id,
+			Delivery_date:   order.Delivery_date,
+			Delivery_status: order.Delivery_status,
 			// Cmt:      order.CouponAmt,
 			// Code:     order.CouponCode,
-			Wmt: order.WalletAmt,
+			Payment_status: order.Status,
+			Wmt:            order.WalletAmt,
 		}
 		result.Payable()
 		results = append(results, result)
@@ -267,16 +297,20 @@ func (h *Handler) ListFailedOrders(c echo.Context) error {
 	var results []model.ResultsAdminsales
 	for _, order := range orders {
 		result := model.ResultsAdminsales{
-			Name:     order.Name,
-			Unit:     order.Unit,
-			Amount:   order.Amount,
-			Date:     order.Date,
-			Oid:      order.Oid,
-			VName:    order.VName,
-			Discount: order.Discount,
+			Name:            order.Name,
+			Unit:            order.Unit,
+			Amount:          order.Amount,
+			Date:            order.Date,
+			Oid:             order.Oid,
+			VName:           order.VName,
+			Discount:        order.Discount,
+			Order_item_id:   order.Order_item_id,
+			Delivery_date:   order.Delivery_date,
+			Delivery_status: order.Delivery_status,
 			// Cmt:      order.CouponAmt,
 			// Code:     order.CouponCode,
-			Wmt: order.WalletAmt,
+			Payment_status: order.Status,
+			Wmt:            order.WalletAmt,
 		}
 		result.Payable()
 		results = append(results, result)
@@ -298,16 +332,20 @@ func (h *Handler) ListReturnedOrders(c echo.Context) error {
 	var results []model.ResultsAdminsales
 	for _, order := range orders {
 		result := model.ResultsAdminsales{
-			Name:     order.Name,
-			Unit:     order.Unit,
-			Amount:   order.Amount,
-			Date:     order.Date,
-			Oid:      order.Oid,
-			VName:    order.VName,
-			Discount: order.Discount,
+			Name:            order.Name,
+			Unit:            order.Unit,
+			Amount:          order.Amount,
+			Date:            order.Date,
+			Oid:             order.Oid,
+			VName:           order.VName,
+			Discount:        order.Discount,
+			Order_item_id:   order.Order_item_id,
+			Delivery_date:   order.Delivery_date,
+			Delivery_status: order.Delivery_status,
 			// Cmt:      order.CouponAmt,
 			// Code:     order.CouponCode,
-			Wmt: order.WalletAmt,
+			Payment_status: order.Status,
+			Wmt:            order.WalletAmt,
 		}
 		result.Payable()
 		results = append(results, result)
@@ -328,13 +366,17 @@ func (h *Handler) ListAllOrders(c echo.Context) error {
 	var results []model.ResultsAdminsales
 	for _, order := range orders {
 		result := model.ResultsAdminsales{
-			Name:     order.Name,
-			Unit:     order.Unit,
-			Amount:   order.Amount,
-			Date:     order.Date,
-			Oid:      order.Oid,
-			VName:    order.VName,
-			Discount: order.Discount,
+			Name:            order.Name,
+			Unit:            order.Unit,
+			Amount:          order.Amount,
+			Date:            order.Date,
+			Oid:             order.Oid,
+			VName:           order.VName,
+			Discount:        order.Discount,
+			Order_item_id:   order.Order_item_id,
+			Delivery_date:   order.Delivery_date,
+			Delivery_status: order.Delivery_status,
+			Payment_status:  order.Status,
 			// Cmt:      order.CouponAmt,
 			// Code:     order.CouponCode,
 			Wmt: order.WalletAmt,

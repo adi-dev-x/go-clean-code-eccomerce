@@ -21,7 +21,7 @@ type Service interface {
 	Addcoupon(ctx context.Context, request model.Coupon) error
 	LatestListing(ctx context.Context) ([]model.Coupon, error)
 	ActiveListing(ctx context.Context) ([]model.Coupon, error)
-
+	GetMainOrders(ctx context.Context, username string, orderUid string) ([]model.ListAllOrdersUsers, error)
 	Deletecoupon(ctx context.Context, id string) error
 
 	///product listing
@@ -418,6 +418,19 @@ func (s *service) ListFailedOrders(ctx context.Context) ([]model.ListOrdersAdmin
 	}
 
 	return orders, nil
+}
+func (s *service) GetMainOrders(ctx context.Context, username string, orderUid string) ([]model.ListAllOrdersUsers, error) {
+
+	/// check if order id is valid
+
+	orders, err := s.repo.PrintingUserSingleMainOrderCollection(ctx, orderUid)
+	fmt.Println(orders)
+	if err != nil {
+		return []model.ListAllOrdersUsers{}, fmt.Errorf("error in retriving data")
+	}
+
+	return orders, nil
+
 }
 func (s *service) ListReturnedOrders(ctx context.Context) ([]model.ListOrdersAdmin, error) {
 
