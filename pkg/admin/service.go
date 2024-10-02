@@ -177,7 +177,15 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 			// value := []interface{}{p.Amount, id, "Credit"}
 			cmp_r_amt, _ := s.repo.GetcpAmtRefund(ctx, p.Moid)
 			fmt.Println("---", cmp_r_amt)
-			f := p.Amount*float64(p.Unit) - float64(cmp_r_amt)
+			var f float64
+			var upcmCheck string
+			if p.Amount*float64(p.Unit) > float64(cmp_r_amt) {
+				f = p.Amount*float64(p.Unit) - float64(cmp_r_amt)
+				upcmCheck = "normal"
+			} else {
+				f = p.Amount * float64(p.Unit)
+				upcmCheck = "notnormal"
+			}
 			wallet_id, err = s.repo.CreditWallet(ctx, p.Usid, f)
 			if wallet_id != "" {
 				value := []interface{}{f, wallet_id, "Credit", p.Usid, p.Moid}
@@ -186,7 +194,10 @@ func (s *service) ReturnItem(ctx context.Context, request model.ReturnOrderPost,
 					fmt.Println("there is erorrrr in wallet transaction")
 				} else {
 					///updateing the mo statussssss
-					s.repo.ChangeCouponRefundStatus(ctx, p.Moid)
+					if upcmCheck == "normal" {
+						s.repo.ChangeCouponRefundStatus(ctx, p.Moid)
+						fmt.Println(" normalll")
+					}
 
 				}
 
